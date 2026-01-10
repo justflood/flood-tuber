@@ -63,9 +63,9 @@ static void flood_tuber_defaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, "blink_interval_min", 2000);
 	obs_data_set_default_int(settings, "blink_interval_max", 8000);
 
-	obs_data_set_default_string(settings, "motion_type", "None");
+	obs_data_set_default_string(settings, "motion_type", "Shake");
 	obs_data_set_default_int(settings, "motion_speed", 100);
-	obs_data_set_default_int(settings, "motion_strength", 10);
+	obs_data_set_default_int(settings, "motion_strength", 3);
 }
 
 
@@ -312,6 +312,30 @@ static const char *flood_tuber_get_name(void *unused)
 	return "Flood Tuber Avatar";
 }
 
+// Macro to implement a simple clear-path callback
+#define IMPLEMENT_CLEAR_CALLBACK(func_name, setting_name) \
+static bool func_name(obs_properties_t *props, obs_property_t *p, void *data) \
+{ \
+	(void)props; \
+	(void)p; \
+	struct flood_tuber_data *tuber = (struct flood_tuber_data *)data; \
+	if (!tuber || !tuber->source) return false; \
+	obs_data_t *settings = obs_source_get_settings(tuber->source); \
+	if (!settings) return false; \
+	obs_data_set_string(settings, setting_name, ""); \
+	obs_source_update(tuber->source, settings); \
+	obs_data_release(settings); \
+	return true; \
+}
+
+IMPLEMENT_CLEAR_CALLBACK(clear_idle,        "path_idle")
+IMPLEMENT_CLEAR_CALLBACK(clear_blink,       "path_blink")
+IMPLEMENT_CLEAR_CALLBACK(clear_action,      "path_action")
+IMPLEMENT_CLEAR_CALLBACK(clear_talk_1,      "path_talk_1")
+IMPLEMENT_CLEAR_CALLBACK(clear_talk_2,      "path_talk_2")
+IMPLEMENT_CLEAR_CALLBACK(clear_talk_1_blink,"path_talk_1_blink")
+IMPLEMENT_CLEAR_CALLBACK(clear_talk_2_blink,"path_talk_2_blink")
+
 static void add_file_prop(obs_properties_t *props, const char *name, const char *desc)
 {
 	obs_properties_add_path(props, name, desc, OBS_PATH_FILE,
@@ -325,13 +349,28 @@ static obs_properties_t *flood_tuber_properties(void *data)
 
 	obs_properties_add_group(props, "images_group", obs_module_text("images_group"), OBS_GROUP_NORMAL, props);
 	
+	const char *clear_txt = obs_module_text("clear_image");
+
 	add_file_prop(props, "path_idle", obs_module_text("path_idle"));
+	obs_properties_add_button(props, "clear_idle", clear_txt, clear_idle);
+
 	add_file_prop(props, "path_blink", obs_module_text("path_blink"));
+	obs_properties_add_button(props, "clear_blink", clear_txt, clear_blink);
+
 	add_file_prop(props, "path_action", obs_module_text("path_action"));
+	obs_properties_add_button(props, "clear_action", clear_txt, clear_action);
+
 	add_file_prop(props, "path_talk_1", obs_module_text("path_talk_1"));
+	obs_properties_add_button(props, "clear_talk_1", clear_txt, clear_talk_1);
+
 	add_file_prop(props, "path_talk_2", obs_module_text("path_talk_2"));
+	obs_properties_add_button(props, "clear_talk_2", clear_txt, clear_talk_2);
+
 	add_file_prop(props, "path_talk_1_blink", obs_module_text("path_talk_1_blink"));
+	obs_properties_add_button(props, "clear_talk_1_blink", clear_txt, clear_talk_1_blink);
+
 	add_file_prop(props, "path_talk_2_blink", obs_module_text("path_talk_2_blink"));
+	obs_properties_add_button(props, "clear_talk_2_blink", clear_txt, clear_talk_2_blink);
 
 	obs_properties_t *audio_group = obs_properties_create();
 	obs_properties_add_group(props, "audio_settings", obs_module_text("audio_settings"), OBS_GROUP_NORMAL, audio_group);
