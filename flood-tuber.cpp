@@ -407,7 +407,7 @@ bool obs_module_load(void)
 	flood_tuber_info.get_height = flood_tuber_get_height;
 	flood_tuber_info.get_properties = flood_tuber_properties;
 	flood_tuber_info.get_defaults = flood_tuber_defaults;
-	flood_tuber_info.icon_type = OBS_ICON_TYPE_IMAGE;
+	flood_tuber_info.icon_type = OBS_ICON_TYPE_AUDIO_INPUT;
 
 	obs_register_source(&flood_tuber_info);
 	blog(LOG_INFO, "[Flood-Tuber] Loaded successfully!");
