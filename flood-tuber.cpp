@@ -149,6 +149,9 @@ static void apply_avatar_to_settings(obs_data_t *settings, const char *avatar_na
             load_str("Motion", "type", "motion_type");
             load_int("Motion", "speed", "motion_speed");
             load_int("Motion", "strength", "motion_strength");
+            
+            if (config_has_user_value(config, "General", "mirror"))
+                obs_data_set_bool(settings, "mirror", config_get_bool(config, "General", "mirror"));
 
             config_close(config);
         }
@@ -173,6 +176,7 @@ static void flood_tuber_defaults(obs_data_t *settings)
 	obs_data_set_default_string(settings, "motion_type", "Shake");
 	obs_data_set_default_int(settings, "motion_speed", 100);
 	obs_data_set_default_int(settings, "motion_strength", 3);
+	obs_data_set_default_bool(settings, "mirror", false);
 	
 	// Try to load default avatar "Flood Tuber Avatar"
 	apply_avatar_to_settings(settings, "Flood Tuber Avatar", true);
@@ -262,6 +266,7 @@ static void flood_tuber_update(void *data_ptr, obs_data_t *settings)
 
 	data->effect_speed = (float)obs_data_get_int(settings, "motion_speed") / 100.0f;
 	data->effect_strength = (float)obs_data_get_int(settings, "motion_strength");
+	data->mirror = obs_data_get_bool(settings, "mirror");
 
 	const char *audio_source_name = obs_data_get_string(settings, "audio_source");
 	obs_source_t *new_audio_source = obs_get_source_by_name(audio_source_name);
@@ -424,6 +429,10 @@ static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 	if (tex) {
 		gs_matrix_push();
 		gs_matrix_translate3f(data->offset_x, data->offset_y, 0.0f);
+		if (data->mirror) {
+			gs_matrix_translate3f((float)gs_texture_get_width(tex), 0.0f, 0.0f);
+			gs_matrix_scale3f(-1.0f, 1.0f, 1.0f);
+		}
 		obs_source_draw(tex, 0, 0, 0, 0, false);
 		gs_matrix_pop();
 	}
@@ -628,6 +637,8 @@ static obs_properties_t *flood_tuber_properties(void *data)
 
 	obs_property_t *p_mstrength = obs_properties_add_int(props, "motion_strength", obs_module_text("motion_strength"), 0, 200, 1);
 	obs_property_set_long_description(p_mstrength, obs_module_text("motion_strength_tooltip"));
+
+	obs_properties_add_bool(props, "mirror", obs_module_text("mirror_label"));
 
 	return props;
 }
