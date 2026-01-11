@@ -71,4 +71,4 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
 
 ## Lisans
 
-Bu proje MIT Lisansı altında lisanslanmıştır.
+Bu proje GNU General Public License v2.0 (GPLv2) Lisansı altında lisanslanmıştır.
