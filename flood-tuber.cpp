@@ -666,7 +666,8 @@ bool obs_module_load(void)
 	flood_tuber_info.icon_type = OBS_ICON_TYPE_AUDIO_INPUT;
 
 	obs_register_source(&flood_tuber_info);
-	blog(LOG_INFO, "[Flood-Tuber] Loaded successfully!");
+#define FLOOD_TUBER_VERSION "0.1.0"
+	blog(LOG_INFO, "[Flood-Tuber] Loaded successfully! Version: %s", FLOOD_TUBER_VERSION);
 	return true;
 }
 //.obs_module_unload

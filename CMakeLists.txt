@@ -1,4 +1,4 @@
-project(flood-tuber)
+project(flood-tuber VERSION 0.1.0)
 
 
 set(flood-tuber_SOURCES
