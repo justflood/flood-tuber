@@ -33,10 +33,13 @@ struct flood_tuber_data {
 	gs_image_file_t image_action;
 	gs_image_file_t image_talking_1;
 	gs_image_file_t image_talking_2;
+	gs_image_file_t image_talking_3;
+	
 	
 	// Variants for blinking while talking
 	gs_image_file_t image_talking_1_blink;
 	gs_image_file_t image_talking_2_blink;
+	gs_image_file_t image_talking_3_blink;
 
 	// -- User Configuration --
 	float threshold;           // Audio dB threshold to trigger talking state
@@ -59,13 +62,14 @@ struct flood_tuber_data {
 	float time_until_next_action; // Randomized target time for next action
 	float time_until_next_blink;  // Randomized target time for next blink
 
-	bool is_talking_frame_1;   // To toggle between talking frame 1 and 2
+	int talking_frame_index;   // Current talking frame index (0, 1, or 2)
 	bool is_blinking_now;      // True if currently in a blink phase
 
 	volatile float current_db; // Current audio level in decibels
 
 	// -- Motion Effects --
 	TalkingEffect talk_effect;
+	bool mirror;
 	float effect_speed;
 	float effect_strength;
 	float timer_effect;        // Continuous timer for sin/cos motion calculations
