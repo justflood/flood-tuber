@@ -25,10 +25,10 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
 *   **[Resmi OBS Kaynaklar Sayfası](https://obsproject.com/forum/resources/)** (Önerilen)
 *   **[GitHub Sürümler (Releases)](https://github.com/justflood/flood-tuber/releases/latest)**
 
-İki kurulum yöntemimiz mevcuttur:
+İki kurulum yöntemi vardır:
 
 ### Seçenek 1: Yükleyici (Önerilen)
-1.  `FloodTuber-Installer.exe` dosyasını indirin.
+1.  `FloodTuber-Installer-x.x.x.exe` dosyasını indirin.
 2.  Yükleyiciyi çalıştırın.
     > **⚠️ "Windows kişisel bilgisayarınızı korudu" uyarısı hakkında not:**
     > Bu açık kaynaklı bir proje olduğundan, pahalı bir kod imzalama sertifikamız bulunmamaktadır. Yükleyiciyi çalıştırdığınızda, Windows SmartScreen "Bilinmeyen Yayıncı" uyarısı gösterebilir.
@@ -38,10 +38,10 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
 3.  Kurulum sihirbazındaki adımları takip edin.
 
 ### Seçenek 2: Taşınabilir / Zip (Manuel)
-1.  `FloodTuber-Portable.zip` dosyasını indirin.
+1.  `FloodTuber-Portable-vx.x.x.zip` dosyasını indirin.
 2.  Dosyaları bir klasöre çıkarın.
-3.  `flood-tuber.dll` dosyasını (varsa `.pdb` ile birlikte) OBS eklenti klasörünüze kopyalayın (genellikle `C:\Program Files\obs-studio\obs-plugins\64bit`).
-4.  `data` klasörünü OBS veri dizinine kopyalayın (genellikle `C:\Program Files\obs-studio\data\obs-plugins\flood-tuber`).
+3.  `flood-tuber.dll` dosyasını OBS eklenti klasörünüze kopyalayın (genellikle `C:\Program Files\obs-studio\obs-plugins\64bit`).
+4.  `data/obs-plugins` klasörü içindeki `flood-tuber` klasörünü OBS veri dizinine kopyalayın (genellikle `C:\Program Files\obs-studio\data\obs-plugins\flood-tuber`).
 5.  OBS Studio'yu yeniden başlatın.
 
 ## Kullanım
@@ -59,7 +59,7 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
 ## Kendi Avatarınızı Oluşturma
 
 1.  Özelliklerdeki **"Open Library Folder"** (Kütüphane Klasörünü Aç) butonuna tıklayın.
-2.  Avatarınızın ismiyle yeni bir klasör oluşturun (örn: `BenimAvatarim`).
+2.  Avatarınızın ismiyle yeni bir klasör oluşturun (örn: `Benim Havali Avatarim`).
 3.  Görsellerinizi içine atın:
     *   `idle.png`
     *   `talk_a.png`, `talk_b.png`, `talk_c.png`
