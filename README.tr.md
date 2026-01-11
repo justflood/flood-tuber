@@ -2,6 +2,12 @@
 
 # Flood Tuber - OBS Eklentisi
 
+> **🚧 Beta Sürüm Bildirimi**
+> Bu eklenti şu anda **Beta** aşamasındadır. Tek kişilik bir geliştirici olarak (ben), geri bildirimleriniz benim için çok değerli!
+>
+> Eğer bir hatayla karşılaşırsanız veya eklenmesini istediğiniz bir özellik varsa (ne kadar karmaşık olursa olsun!), lütfen GitHub Issues üzerinden belirtmekten çekinmeyin. Her öneriyi not alıyor ve bu eklentiyi geliştirmek için üzerinde çalışıyorum.
+> **[Github Issues](https://github.com/justflood/flood-tuber/issues)**
+
 **Flood Tuber**, yayınlarınıza hayat katan, hafif ve güçlü bir tepkisel PNGTuber avatar eklentisidir. Mikrofonunuzun ses seviyesini algılayarak avatarınızı konuşma, göz kırpma ve rastgele aksiyon durumlarıyla canlandırır, yayınlarınıza karmaşık kurulumlar olmadan dinamizm katar.
 
 ## Özellikler
@@ -22,8 +28,8 @@
 
 Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
 
-*   **[Resmi OBS Kaynaklar Sayfası](https://obsproject.com/forum/resources/)** (Önerilen)
-*   **[GitHub Sürümler (Releases)](https://github.com/justflood/flood-tuber/releases/latest)**
+*   **[Resmi OBS Kaynaklar Sayfası](https://obsproject.com/forum/resources/flood-tuber-native-pngtuber-plugin.2336/)**
+*   **[GitHub Sürümler (Releases)](https://github.com/justflood/flood-tuber/releases/latest)** (Önerilen)
 
 İki kurulum yöntemi vardır:
 
@@ -31,7 +37,7 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
 1.  `FloodTuber-Installer-x.x.x.exe` dosyasını indirin.
 2.  Yükleyiciyi çalıştırın.
     > **⚠️ "Windows kişisel bilgisayarınızı korudu" uyarısı hakkında not:**
-    > Bu açık kaynaklı bir proje olduğundan, pahalı bir kod imzalama sertifikamız bulunmamaktadır. Yükleyiciyi çalıştırdığınızda, Windows SmartScreen "Bilinmeyen Yayıncı" uyarısı gösterebilir.
+    > Bu açık kaynaklı bir proje olduğundan, pahalı bir kod imzalama sertifikam bulunmamaktadır. Yükleyiciyi çalıştırdığınızda, Windows SmartScreen "Bilinmeyen Yayıncı" uyarısı gösterebilir.
     > Bu, açık kaynaklı yazılımlar için tamamen normaldir. Devam etmek için:
     > *   **"Ek Bilgi" (More Info)** seçeneğine tıklayın.
     > *   **"Yine de Çalıştır" (Run Anyway)** butonuna basın.
