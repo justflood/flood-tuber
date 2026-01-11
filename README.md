@@ -2,6 +2,12 @@
 
 # Flood Tuber - OBS Plugin
 
+> **🚧 Beta Release Notice**
+> This plugin is currently in **Beta**. As a solo developer (I), your feedback is incredibly valuable to me!
+>
+> If you encounter any bugs or have any feature requests (even complex ones!), please don't hesitate to open an issue on GitHub. I take note of every suggestion and will work on them to make this plugin better.
+> **[Github Issues](https://github.com/justflood/flood-tuber/issues)**
+
 **Flood Tuber** is a lightweight OBS Studio plugin that brings your streams to life with reactive PNGTuber avatars. It detects your microphone's audio levels to animate your avatar with talking, blinking, and random action states, adding dynamism to your content without complex setups.
 
 ## Features
@@ -22,16 +28,16 @@
 
 You can download the latest version of Flood Tuber from:
 
-*   **[Official OBS Resources Page](https://obsproject.com/forum/resources/)** (Recommended)
-*   **[GitHub Releases](https://github.com/justflood/flood-tuber/releases/latest)**
+*   **[Official OBS Resources Page](https://obsproject.com/forum/resources/flood-tuber-native-pngtuber-plugin.2336/)** 
+*   **[GitHub Releases](https://github.com/justflood/flood-tuber/releases/latest)** (Recommended)
 
-We offer two installation methods:
+I offer two installation methods:
 
 ### Option 1: Installer (Recommended)
 1.  Download the `FloodTuber-Installer.exe`.
 2.  Run the installer.
     > **⚠️ Note regarding "Windows protected your PC":**
-    > Since this is an open-source project, we do not have an expensive code signing certificate. When you run the installer, Windows SmartScreen may show a warning saying "Unknown Publisher".
+    > Since this is an open-source project, I do not have an expensive code signing certificate. When you run the installer, Windows SmartScreen may show a warning saying "Unknown Publisher".
     > This is completely normal for open-source software. To proceed:
     > *   Click **"More Info"**
     > *   Click **"Run Anyway"**
