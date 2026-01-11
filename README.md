@@ -40,8 +40,8 @@ We offer two installation methods:
 ### Option 2: Portable (Manual)
 1.  Download the `FloodTuber-Portable.zip`.
 2.  Extract the contents.
-3.  Copy the `flood-tuber.dll` (and `.pdb` if available) into your OBS plugins folder (usually `C:\Program Files\obs-studio\obs-plugins\64bit`).
-4.  Copy the `data` folder into the OBS data directory (usually `C:\Program Files\obs-studio\data\obs-plugins\flood-tuber`).
+3.  Copy the `flood-tuber.dll` into your OBS plugins folder (usually `C:\Program Files\obs-studio\obs-plugins\64bit`).
+4.  Copy the `flood-tuber` folder from the `data/obs-plugins` folder to the OBS data directory (usually `C:\Program Files\obs-studio\data\obs-plugins\flood-tuber`).
 5.  Restart OBS Studio.
 
 ## Usage
@@ -59,7 +59,7 @@ We offer two installation methods:
 ## Creating Your Own Avatar
 
 1.  Click **"Open Library Folder"** in the properties.
-2.  Create a new folder with your avatar's name (e.g., `MyCoolAvatar`).
+2.  Create a new folder with your avatar's name (e.g., `My Cool Avatar`).
 3.  Place your images inside:
     *   `idle.png`
     *   `talk_a.png`, `talk_b.png`, `talk_c.png`
