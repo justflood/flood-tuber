@@ -30,3 +30,4 @@ data/
 collect_files.ps1
 installer_script.iss
 icon.ico
+Output/
