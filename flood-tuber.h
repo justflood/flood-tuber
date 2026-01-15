@@ -5,6 +5,7 @@
 #include <util/dstr.h>
 #include <graphics/image-file.h>
 #include <math.h>
+#include "webp-decoder.h"
 
 #define BLOG(level, format, ...) blog(level, "[Flood-Tuber] " format, ##__VA_ARGS__)
 
@@ -23,23 +24,55 @@ enum class TalkingEffect {
 	SHAKE       // Random jitter/vibration
 };
 
+// Wrapper for different image types (OBS standard or Custom)
+struct FloodImage {
+    enum Type {
+        OBS_STANDARD, // Uses gs_image_file_t (GIF, JPEG, PNG, etc.)
+        CUSTOM_WEBP,  // Uses WebPDecoder
+        CUSTOM_APNG   // Uses APNGDecoder (Future)
+    } type;
+
+    // Standard OBS loader
+    gs_image_file_t obs_image;
+
+    // Custom decoders
+    WebPDecoder* webp_decoder = nullptr;
+    
+    // Animation state for custom decoders
+    uint64_t anim_time_ns = 0;
+
+    FloodImage() {
+        type = OBS_STANDARD;
+        gs_image_file_init(&obs_image, NULL);
+    }
+
+    // Helper: Free resources
+    void Free() {
+        if (webp_decoder) {
+            delete webp_decoder;
+            webp_decoder = nullptr;
+        }
+        gs_image_file_free(&obs_image);
+        type = OBS_STANDARD;
+    }
+};
+
 struct flood_tuber_data {
 	obs_source_t *source;       // The OBS source instance for this plugin
 	obs_source_t *audio_source; // The external audio source we are monitoring
 
-	// -- Image Assets --
-	gs_image_file_t image_idle;
-	gs_image_file_t image_blink;
-	gs_image_file_t image_action;
-	gs_image_file_t image_talking_1;
-	gs_image_file_t image_talking_2;
-	gs_image_file_t image_talking_3;
-	
+	// -- Image Assets (Using Wrapper) --
+	FloodImage image_idle;
+	FloodImage image_blink;
+	FloodImage image_action;
+	FloodImage image_talking_1;
+	FloodImage image_talking_2;
+	FloodImage image_talking_3;
 	
 	// Variants for blinking while talking
-	gs_image_file_t image_talking_1_blink;
-	gs_image_file_t image_talking_2_blink;
-	gs_image_file_t image_talking_3_blink;
+	FloodImage image_talking_1_blink;
+	FloodImage image_talking_2_blink;
+	FloodImage image_talking_3_blink;
 
 	// -- User Configuration --
 	float threshold;           // Audio dB threshold to trigger talking state

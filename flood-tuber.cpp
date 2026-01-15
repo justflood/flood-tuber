@@ -11,13 +11,65 @@
 
 
 // Helper: Loads an image file and initializes its texture
-static void update_image(gs_image_file_t *image, const char *path)
+// Helper: Loads an image file (Standard or WebP)
+static void update_image(FloodImage *image, const char *path)
 {
 	obs_enter_graphics();
-	gs_image_file_free(image);
-	gs_image_file_init(image, path);
-	gs_image_file_init_texture(image);
+	image->Free();
+    
+    if (path && *path) {
+        const char *ext = strrchr(path, '.');
+        bool is_webp = (ext && (_strcmpi(ext, ".webp") == 0));
+        
+        if (is_webp) {
+            image->type = FloodImage::CUSTOM_WEBP;
+            image->webp_decoder = new WebPDecoder();
+            if (!image->webp_decoder->Load(path)) {
+                 blog(LOG_WARNING, "Failed to load WebP: %s", path);
+                 image->Free();
+            } else {
+                 blog(LOG_INFO, "Loaded WebP: %s", path);
+            }
+        } else {
+            image->type = FloodImage::OBS_STANDARD;
+            gs_image_file_init(&image->obs_image, path);
+            gs_image_file_init_texture(&image->obs_image);
+        }
+    }
+    image->anim_time_ns = 0;
 	obs_leave_graphics();
+}
+
+static void flood_image_tick(FloodImage *img, uint64_t elapsed_ns) {
+    if (img->type == FloodImage::CUSTOM_WEBP) {
+        if (img->webp_decoder) {
+            img->anim_time_ns += elapsed_ns;
+        }
+    } else {
+        gs_image_file_tick(&img->obs_image, elapsed_ns);
+        gs_image_file_update_texture(&img->obs_image);
+    }
+}
+
+static gs_texture_t* flood_image_get_texture(FloodImage *img) {
+    if (img->type == FloodImage::CUSTOM_WEBP && img->webp_decoder) {
+        return img->webp_decoder->GetTextureForTime(img->anim_time_ns / 1000000ULL);
+    }
+    return img->obs_image.texture;
+}
+
+static uint32_t flood_image_get_width(FloodImage *img) {
+    if (img->type == FloodImage::CUSTOM_WEBP && img->webp_decoder) {
+        return img->webp_decoder->GetWidth();
+    }
+    return img->obs_image.cx;
+}
+
+static uint32_t flood_image_get_height(FloodImage *img) {
+    if (img->type == FloodImage::CUSTOM_WEBP && img->webp_decoder) {
+        return img->webp_decoder->GetHeight();
+    }
+    return img->obs_image.cy;
 }
 
 
@@ -210,15 +262,15 @@ static void flood_tuber_destroy(void *d)
 		obs_source_release(data->audio_source);
 	}
 	obs_enter_graphics();
-	gs_image_file_free(&data->image_idle);
-	gs_image_file_free(&data->image_blink);
-	gs_image_file_free(&data->image_action);
-	gs_image_file_free(&data->image_talking_1);
-	gs_image_file_free(&data->image_talking_2);
-	gs_image_file_free(&data->image_talking_3);
-	gs_image_file_free(&data->image_talking_1_blink);
-	gs_image_file_free(&data->image_talking_2_blink);
-	gs_image_file_free(&data->image_talking_3_blink);
+	data->image_idle.Free();
+	data->image_blink.Free();
+	data->image_action.Free();
+	data->image_talking_1.Free();
+	data->image_talking_2.Free();
+	data->image_talking_3.Free();
+	data->image_talking_1_blink.Free();
+	data->image_talking_2_blink.Free();
+	data->image_talking_3_blink.Free();
 	obs_leave_graphics();
 	bfree(data);
 }
@@ -292,35 +344,17 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 	// seconds (float) * 1,000,000,000 = nanoseconds
 	uint64_t elapsed_ns = (uint64_t)(seconds * 1000000000.0f);
 
-    obs_enter_graphics(); // Required for texture updates
+    obs_enter_graphics(); // Required for standard texture updates
 	
-    gs_image_file_tick(&data->image_idle, elapsed_ns);
-	gs_image_file_update_texture(&data->image_idle);
-
-	gs_image_file_tick(&data->image_blink, elapsed_ns);
-	gs_image_file_update_texture(&data->image_blink);
-
-	gs_image_file_tick(&data->image_action, elapsed_ns);
-	gs_image_file_update_texture(&data->image_action);
-
-	gs_image_file_tick(&data->image_talking_1, elapsed_ns);
-	gs_image_file_update_texture(&data->image_talking_1);
-
-	gs_image_file_tick(&data->image_talking_2, elapsed_ns);
-	gs_image_file_update_texture(&data->image_talking_2);
-
-	gs_image_file_tick(&data->image_talking_3, elapsed_ns);
-	gs_image_file_update_texture(&data->image_talking_3);
-
-	gs_image_file_tick(&data->image_talking_1_blink, elapsed_ns);
-	gs_image_file_update_texture(&data->image_talking_1_blink);
-
-	gs_image_file_tick(&data->image_talking_2_blink, elapsed_ns);
-	gs_image_file_update_texture(&data->image_talking_2_blink);
-
-	gs_image_file_tick(&data->image_talking_3_blink, elapsed_ns);
-	gs_image_file_update_texture(&data->image_talking_3_blink);
-    
+    flood_image_tick(&data->image_idle, elapsed_ns);
+	flood_image_tick(&data->image_blink, elapsed_ns);
+	flood_image_tick(&data->image_action, elapsed_ns);
+	flood_image_tick(&data->image_talking_1, elapsed_ns);
+	flood_image_tick(&data->image_talking_2, elapsed_ns);
+	flood_image_tick(&data->image_talking_3, elapsed_ns);
+	flood_image_tick(&data->image_talking_1_blink, elapsed_ns);
+	flood_image_tick(&data->image_talking_2_blink, elapsed_ns);
+	flood_image_tick(&data->image_talking_3_blink, elapsed_ns);
     
     obs_leave_graphics();
 	
@@ -367,7 +401,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 		}
 	}
 
-	if (data->image_blink.texture) {
+	if (flood_image_get_texture(&data->image_blink)) {
 		data->timer_blink += seconds;
 
 		if (!data->is_blinking_now && data->timer_blink >= data->time_until_next_blink) {
@@ -410,20 +444,19 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
-	gs_texture_t *tex = data->image_idle.texture;
+	gs_texture_t *tex = flood_image_get_texture(&data->image_idle);
 
-	if (data->current_state == AvatarState::ACTION && data->image_action.texture) {
-		tex = data->image_action.texture;
+	if (data->current_state == AvatarState::ACTION && flood_image_get_texture(&data->image_action)) {
+		tex = flood_image_get_texture(&data->image_action);
 	} 
 	else if (data->current_state == AvatarState::TALKING) {
 		bool blink = data->is_blinking_now;
 		
-		
 		int idx = data->talking_frame_index;
-		gs_image_file_t *talk_img = nullptr;
-		gs_image_file_t *talk_blink_img = nullptr;
+		FloodImage *talk_img = nullptr;
+		FloodImage *talk_blink_img = nullptr;
 
-		// Select based on index, falling back to lower indices if current is missing
+		// Select based on index
 		if (idx == 0) {
 			talk_img = &data->image_talking_1;
 			talk_blink_img = &data->image_talking_1_blink;
@@ -435,34 +468,34 @@ static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 			talk_blink_img = &data->image_talking_3_blink;
 		}
 
-		// Fallbacks: If 3 is missing, try 2. If 2 missing, try 1.
-		if (!talk_img->texture && idx == 2) {
+		// Fallbacks
+		if (!flood_image_get_texture(talk_img) && idx == 2) {
              talk_img = &data->image_talking_2;
              talk_blink_img = &data->image_talking_2_blink;
              idx = 1;
         }
-		if (!talk_img->texture && idx == 1) {
+		if (!flood_image_get_texture(talk_img) && idx == 1) {
              talk_img = &data->image_talking_1;
              talk_blink_img = &data->image_talking_1_blink;
         }
 
 		// Determine final texture
-		if (blink && talk_blink_img && talk_blink_img->texture) {
-			tex = talk_blink_img->texture;
-		} else if (talk_img && talk_img->texture) {
-			tex = talk_img->texture;
+		if (blink && talk_blink_img && flood_image_get_texture(talk_blink_img)) {
+			tex = flood_image_get_texture(talk_blink_img);
+		} else if (talk_img && flood_image_get_texture(talk_img)) {
+			tex = flood_image_get_texture(talk_img);
 		}
 
 		// Final fallback for blinking if specific talk-blink is missing
-		if (blink && (!talk_blink_img || !talk_blink_img->texture) && data->image_blink.texture) {
-			tex = data->image_blink.texture;
+		if (blink && (!talk_blink_img || !flood_image_get_texture(talk_blink_img)) && flood_image_get_texture(&data->image_blink)) {
+			tex = flood_image_get_texture(&data->image_blink);
 		}
 	} 
 	else {
-		if (data->is_blinking_now && data->image_blink.texture) {
-			tex = data->image_blink.texture;
+		if (data->is_blinking_now && flood_image_get_texture(&data->image_blink)) {
+			tex = flood_image_get_texture(&data->image_blink);
 		} else {
-			tex = data->image_idle.texture;
+			tex = flood_image_get_texture(&data->image_idle);
 		}
 	}
 
@@ -481,12 +514,14 @@ static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 static uint32_t flood_tuber_get_width(void *data_ptr)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
-	return data->image_idle.cx ? data->image_idle.cx : 500;
+    uint32_t w = flood_image_get_width(&data->image_idle);
+	return w ? w : 500;
 }
 static uint32_t flood_tuber_get_height(void *data_ptr)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
-	return data->image_idle.cy ? data->image_idle.cy : 500;
+    uint32_t h = flood_image_get_height(&data->image_idle);
+	return h ? h : 500;
 }
 static const char *flood_tuber_get_name(void *unused)
 {
