@@ -165,6 +165,7 @@ static void flood_tuber_defaults(obs_data_t *settings)
 {
 	obs_data_set_default_double(settings, "threshold", -30.0);
 	obs_data_set_default_int(settings, "release_delay", 200);
+	obs_data_set_default_double(settings, "talking_speed", 0.10);
 
 	obs_data_set_default_int(settings, "action_duration", 4000);
 	obs_data_set_default_int(settings, "action_interval_min", 60000);
@@ -267,6 +268,8 @@ static void flood_tuber_update(void *data_ptr, obs_data_t *settings)
 	data->effect_speed = (float)obs_data_get_int(settings, "motion_speed") / 100.0f;
 	data->effect_strength = (float)obs_data_get_int(settings, "motion_strength");
 	data->mirror = obs_data_get_bool(settings, "mirror");
+	data->talk_interval = (float)obs_data_get_double(settings, "talking_speed");
+	if (data->talk_interval < 0.01f) data->talk_interval = 0.01f;
 
 	const char *audio_source_name = obs_data_get_string(settings, "audio_source");
 	obs_source_t *new_audio_source = obs_get_source_by_name(audio_source_name);
@@ -284,6 +287,43 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
 
+	// Tick animations for all images (for GIF/APNG support)
+	// gs_image_file_tick expects time in nanoseconds (uint64_t)
+	// seconds (float) * 1,000,000,000 = nanoseconds
+	uint64_t elapsed_ns = (uint64_t)(seconds * 1000000000.0f);
+
+    obs_enter_graphics(); // Required for texture updates
+	
+    gs_image_file_tick(&data->image_idle, elapsed_ns);
+	gs_image_file_update_texture(&data->image_idle);
+
+	gs_image_file_tick(&data->image_blink, elapsed_ns);
+	gs_image_file_update_texture(&data->image_blink);
+
+	gs_image_file_tick(&data->image_action, elapsed_ns);
+	gs_image_file_update_texture(&data->image_action);
+
+	gs_image_file_tick(&data->image_talking_1, elapsed_ns);
+	gs_image_file_update_texture(&data->image_talking_1);
+
+	gs_image_file_tick(&data->image_talking_2, elapsed_ns);
+	gs_image_file_update_texture(&data->image_talking_2);
+
+	gs_image_file_tick(&data->image_talking_3, elapsed_ns);
+	gs_image_file_update_texture(&data->image_talking_3);
+
+	gs_image_file_tick(&data->image_talking_1_blink, elapsed_ns);
+	gs_image_file_update_texture(&data->image_talking_1_blink);
+
+	gs_image_file_tick(&data->image_talking_2_blink, elapsed_ns);
+	gs_image_file_update_texture(&data->image_talking_2_blink);
+
+	gs_image_file_tick(&data->image_talking_3_blink, elapsed_ns);
+	gs_image_file_update_texture(&data->image_talking_3_blink);
+    
+    
+    obs_leave_graphics();
+	
 	float magnitude = data->current_db;
 	bool raw_talking = (magnitude > data->threshold) && (magnitude > -95.0f);
 
@@ -301,7 +341,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 
 	if (data->current_state == AvatarState::TALKING) {
 		data->timer_talk_anim += seconds;
-		if (data->timer_talk_anim > 0.10f) {
+		if (data->timer_talk_anim > data->talk_interval) {
 			data->talking_frame_index = (data->talking_frame_index + 1) % 3;
 			data->timer_talk_anim = 0.0f;
 		}
@@ -524,7 +564,7 @@ static bool load_avatar(obs_properties_t *props, obs_property_t *p, void *data)
 static void add_file_prop(obs_properties_t *props, const char *name, const char *desc)
 {
 	obs_properties_add_path(props, name, desc, OBS_PATH_FILE,
-				"Image Files (*.bmp *.jpg *.jpeg *.tga *.png *.gif);;All Files (*.*)", NULL);
+				"Image Files (*.bmp *.jpg *.jpeg *.tga *.png *.gif *.webp *.apng);;All Files (*.*)", NULL);
 }
 
 // Properties: Defines the configuration UI in OBS
@@ -598,6 +638,9 @@ static obs_properties_t *flood_tuber_properties(void *data)
 
 	obs_property_t *p_release = obs_properties_add_int(props, "release_delay", obs_module_text("release_delay"), 0, 10000, 10);
 	obs_property_set_long_description(p_release, obs_module_text("release_delay_tooltip"));
+
+	obs_property_t *p_speed = obs_properties_add_float_slider(props, "talking_speed", obs_module_text("talking_speed"), 0.01, 1.0, 0.01);
+	obs_property_set_long_description(p_speed, obs_module_text("talking_speed_tooltip"));
 
 	obs_properties_t *blink_group = obs_properties_create();
 	obs_properties_add_group(props, "blink_settings", obs_module_text("blink_settings"), OBS_GROUP_NORMAL, blink_group);

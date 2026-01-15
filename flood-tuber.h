@@ -70,6 +70,7 @@ struct flood_tuber_data {
 	// -- Motion Effects --
 	TalkingEffect talk_effect;
 	bool mirror;
+	float talk_interval;    // Time in seconds between talking frames (default 0.10f)
 	float effect_speed;
 	float effect_strength;
 	float timer_effect;        // Continuous timer for sin/cos motion calculations
