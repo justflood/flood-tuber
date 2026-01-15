@@ -30,6 +30,25 @@ static void update_image(FloodImage *image, const char *path)
             } else {
                  blog(LOG_INFO, "Loaded WebP: %s", path);
             }
+        } else if (ext && (_strcmpi(ext, ".apng") == 0 || _strcmpi(ext, ".png") == 0)) {
+            // Check if it's an animated PNG
+            APNGDecoder *temp_decoder = new APNGDecoder();
+            if (temp_decoder->Load(path) && temp_decoder->IsAnimated()) {
+                 image->type = FloodImage::CUSTOM_APNG;
+                 image->apng_decoder = temp_decoder;
+                 blog(LOG_INFO, "Loaded Animated PNG: %s", path);
+            } else {
+                 if (temp_decoder->IsAnimated())
+                     blog(LOG_WARNING, "Failed to load APNG (corrupt?): %s", path);
+                 
+                 // Clean up checks
+                 delete temp_decoder;
+                 
+                 // Fallback to standard OBS loader for static PNGs or if APNG load failed
+                 image->type = FloodImage::OBS_STANDARD;
+                 gs_image_file_init(&image->obs_image, path);
+                 gs_image_file_init_texture(&image->obs_image);
+            }
         } else {
             image->type = FloodImage::OBS_STANDARD;
             gs_image_file_init(&image->obs_image, path);
@@ -45,6 +64,16 @@ static void flood_image_tick(FloodImage *img, uint64_t elapsed_ns) {
         if (img->webp_decoder) {
             img->anim_time_ns += elapsed_ns;
         }
+    } else if (img->type == FloodImage::CUSTOM_APNG) {
+        if (img->apng_decoder) {
+            img->anim_time_ns += elapsed_ns;
+            // Trace animation time occasionally (approx every 1s at 60fps)
+            static int log_counter = 0;
+            if (++log_counter > 60) {
+                 // BLOG(LOG_DEBUG, "APNG Tick: Time=%llu ms", img->anim_time_ns / 1000000);
+                 log_counter = 0;
+            }
+        }
     } else {
         gs_image_file_tick(&img->obs_image, elapsed_ns);
         gs_image_file_update_texture(&img->obs_image);
@@ -55,6 +84,9 @@ static gs_texture_t* flood_image_get_texture(FloodImage *img) {
     if (img->type == FloodImage::CUSTOM_WEBP && img->webp_decoder) {
         return img->webp_decoder->GetTextureForTime(img->anim_time_ns / 1000000ULL);
     }
+    if (img->type == FloodImage::CUSTOM_APNG && img->apng_decoder) {
+        return img->apng_decoder->GetTextureForTime(img->anim_time_ns / 1000000ULL);
+    }
     return img->obs_image.texture;
 }
 
@@ -62,12 +94,18 @@ static uint32_t flood_image_get_width(FloodImage *img) {
     if (img->type == FloodImage::CUSTOM_WEBP && img->webp_decoder) {
         return img->webp_decoder->GetWidth();
     }
+    if (img->type == FloodImage::CUSTOM_APNG && img->apng_decoder) {
+        return img->apng_decoder->GetWidth();
+    }
     return img->obs_image.cx;
 }
 
 static uint32_t flood_image_get_height(FloodImage *img) {
     if (img->type == FloodImage::CUSTOM_WEBP && img->webp_decoder) {
         return img->webp_decoder->GetHeight();
+    }
+    if (img->type == FloodImage::CUSTOM_APNG && img->apng_decoder) {
+        return img->apng_decoder->GetHeight();
     }
     return img->obs_image.cy;
 }

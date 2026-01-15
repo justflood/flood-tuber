@@ -6,6 +6,7 @@
 #include <graphics/image-file.h>
 #include <math.h>
 #include "webp-decoder.h"
+#include "apng-decoder.h"
 
 #define BLOG(level, format, ...) blog(level, "[Flood-Tuber] " format, ##__VA_ARGS__)
 
@@ -37,6 +38,7 @@ struct FloodImage {
 
     // Custom decoders
     WebPDecoder* webp_decoder = nullptr;
+    APNGDecoder* apng_decoder = nullptr;
     
     // Animation state for custom decoders
     uint64_t anim_time_ns = 0;
@@ -51,6 +53,10 @@ struct FloodImage {
         if (webp_decoder) {
             delete webp_decoder;
             webp_decoder = nullptr;
+        }
+        if (apng_decoder) {
+            delete apng_decoder;
+            apng_decoder = nullptr;
         }
         gs_image_file_free(&obs_image);
         type = OBS_STANDARD;

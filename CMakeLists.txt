@@ -6,6 +6,10 @@ set(flood-tuber_SOURCES
     flood-tuber.h
     webp-decoder.cpp
     webp-decoder.h
+    lodepng.cpp
+    lodepng.h
+    apng-decoder.cpp
+    apng-decoder.h
 )
 
 
