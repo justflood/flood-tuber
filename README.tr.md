@@ -21,6 +21,9 @@
     *   **Shake (Titreme):** Konuşurken avatar titrer.
     *   **Bounce (Zıplama):** Konuşurken avatar yukarı aşağı zıplar.
     *   **None (Yok):** Sabit durur.
+*   **🎞️ Gelişmiş Animasyon Desteği:** **APNG**, **WebP** ve **GIF** formatları için tam destek.
+    *   **Akıllı Algılama:** Dosya uzantısı yanlış olsa bile (.png olarak kaydedilmiş APNG gibi) animasyonları otomatik algılar.
+*   **⚡ Konuşma Animasyon Hızı:** Avatarınızın konuşma hızını (ağız hareketlerini) özel bir kaydırıcı ile ayarlayın.
 *   **↔️ Aynalama (Mirror):** Tek bir kutucuk ile avatarınızı yatay olarak çevirebilirsiniz.
 *   **🛠️ Avatara Özel Ayarlar:** Kütüphanedeki her avatarın hassasiyet, hız ve zamanlama ayarlarını içeren kendi `settings.ini` dosyası olabilir.
 

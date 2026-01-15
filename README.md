@@ -21,6 +21,9 @@
     *   **Shake:** Avatar vibrates/shakes when talking.
     *   **Bounce:** Avatar bounces up and down when talking.
     *   **None:** Static talking image.
+*   **🎞️ Advanced Animations:** Full support for **APNG**, **WebP**, and **GIF** formats.
+    *   **Smart Detection:** Automatically detects animations even if file extensions are incorrect (e.g. APNG saved as `.png`).
+*   **⚡ Talking Animation Speed:** Control how fast your avatar's mouth moves (frames/sec) with a dedicated slider.
 *   **↔️ Mirror Mode:** Flip your avatar horizontally with a single checkbox.
 *   **🛠️ Custom Settings per Avatar:** Each avatar in the library can have its own `settings.ini` to define specific sensitivities, speeds, and timings.
 
