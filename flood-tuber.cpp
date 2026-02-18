@@ -11,13 +11,154 @@
 
 
 // Helper: Loads an image file and initializes its texture
-static void update_image(gs_image_file_t *image, const char *path)
+// Helper: Loads an image file (Standard or WebP)
+// Helper: Validates file headers to prevent crashes (e.g. renamed .txt files)
+static bool check_file_signature(const char *path) {
+    if (!path || !*path) return false;
+    
+    FILE *f = fopen(path, "rb");
+    if (!f) return false;
+    
+    unsigned char sig[12] = {0};
+    size_t len = fread(sig, 1, 12, f);
+    fclose(f);
+    
+    if (len < 4) return false; // Too small to be valid image
+
+    // Check GIF: "GIF87a" or "GIF89a"
+    if (len >= 6 && sig[0] == 'G' && sig[1] == 'I' && sig[2] == 'F' && 
+        sig[3] == '8' && (sig[4] == '7' || sig[4] == '9') && sig[5] == 'a') {
+        return true; 
+    }
+
+    // Check PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (len >= 8 && sig[0] == 0x89 && sig[1] == 0x50 && sig[2] == 0x4E && sig[3] == 0x47 &&
+        sig[4] == 0x0D && sig[5] == 0x0A && sig[6] == 0x1A && sig[7] == 0x0A) {
+        return true;
+    }
+
+    // Check WebP: RIFF .... WEBP
+    if (len >= 12 && sig[0] == 'R' && sig[1] == 'I' && sig[2] == 'F' && sig[3] == 'F' &&
+        sig[8] == 'W' && sig[9] == 'E' && sig[10] == 'B' && sig[11] == 'P') {
+        return true;
+    }
+
+    // Check JPEG: FF D8 FF
+    if (len >= 3 && sig[0] == 0xFF && sig[1] == 0xD8 && sig[2] == 0xFF) {
+        return true;
+    }
+
+    // Allow others if we are brave, but for GIF specifically we MUST validate 
+    // because OBS crashes on corrupt GIFs.
+    const char *ext = strrchr(path, '.');
+    if (ext && _strcmpi(ext, ".gif") == 0) {
+        return false; // Extension says GIF but header doesn't match
+    }
+
+    return true; // Let OBS try other formats (BMP, TGA etc) if not explicitly suspicious
+}
+
+// Helper: Loads an image file and initializes its texture
+static void update_image(FloodImage *image, const char *path)
 {
 	obs_enter_graphics();
-	gs_image_file_free(image);
-	gs_image_file_init(image, path);
-	gs_image_file_init_texture(image);
+	image->Free();
+    
+    if (path && *path) {
+        if (!check_file_signature(path)) {
+            blog(LOG_WARNING, "Invalid file signature (corrupt or fake file?): %s", path);
+        } else {
+            const char *ext = strrchr(path, '.');
+            bool is_webp = (ext && (_strcmpi(ext, ".webp") == 0));
+            
+            if (is_webp) {
+                image->type = FloodImage::CUSTOM_WEBP;
+                image->webp_decoder = new WebPDecoder();
+                if (!image->webp_decoder->Load(path)) {
+                     blog(LOG_WARNING, "Failed to load WebP: %s", path);
+                     image->Free();
+                } else {
+                     blog(LOG_INFO, "Loaded WebP: %s", path);
+                }
+            } else if (ext && (_strcmpi(ext, ".apng") == 0 || _strcmpi(ext, ".png") == 0)) {
+                // Check if it's an animated PNG
+                APNGDecoder *temp_decoder = new APNGDecoder();
+                if (temp_decoder->Load(path) && temp_decoder->IsAnimated()) {
+                     image->type = FloodImage::CUSTOM_APNG;
+                     image->apng_decoder = temp_decoder;
+                     blog(LOG_INFO, "Loaded Animated PNG: %s", path);
+                } else {
+                     if (temp_decoder->IsAnimated())
+                         blog(LOG_WARNING, "Failed to load APNG (corrupt?): %s", path);
+                     
+                     // Clean up checks
+                     delete temp_decoder;
+                     
+                     // Fallback to standard OBS loader for static PNGs or if APNG load failed
+                     image->type = FloodImage::OBS_STANDARD;
+                     gs_image_file_init(&image->obs_image, path);
+                     gs_image_file_init_texture(&image->obs_image);
+                }
+            } else {
+                image->type = FloodImage::OBS_STANDARD;
+                gs_image_file_init(&image->obs_image, path);
+                gs_image_file_init_texture(&image->obs_image);
+            }
+        }
+    }
+    image->anim_time_ns = 0;
 	obs_leave_graphics();
+}
+
+static void flood_image_tick(FloodImage *img, uint64_t elapsed_ns) {
+    if (img->type == FloodImage::CUSTOM_WEBP) {
+        if (img->webp_decoder) {
+            img->anim_time_ns += elapsed_ns;
+        }
+    } else if (img->type == FloodImage::CUSTOM_APNG) {
+        if (img->apng_decoder) {
+            img->anim_time_ns += elapsed_ns;
+            // Trace animation time occasionally (approx every 1s at 60fps)
+            static int log_counter = 0;
+            if (++log_counter > 60) {
+                 // BLOG(LOG_DEBUG, "APNG Tick: Time=%llu ms", img->anim_time_ns / 1000000);
+                 log_counter = 0;
+            }
+        }
+    } else {
+        gs_image_file_tick(&img->obs_image, elapsed_ns);
+        gs_image_file_update_texture(&img->obs_image);
+    }
+}
+
+static gs_texture_t* flood_image_get_texture(FloodImage *img) {
+    if (img->type == FloodImage::CUSTOM_WEBP && img->webp_decoder) {
+        return img->webp_decoder->GetTextureForTime(img->anim_time_ns / 1000000ULL);
+    }
+    if (img->type == FloodImage::CUSTOM_APNG && img->apng_decoder) {
+        return img->apng_decoder->GetTextureForTime(img->anim_time_ns / 1000000ULL);
+    }
+    return img->obs_image.texture;
+}
+
+static uint32_t flood_image_get_width(FloodImage *img) {
+    if (img->type == FloodImage::CUSTOM_WEBP && img->webp_decoder) {
+        return img->webp_decoder->GetWidth();
+    }
+    if (img->type == FloodImage::CUSTOM_APNG && img->apng_decoder) {
+        return img->apng_decoder->GetWidth();
+    }
+    return img->obs_image.cx;
+}
+
+static uint32_t flood_image_get_height(FloodImage *img) {
+    if (img->type == FloodImage::CUSTOM_WEBP && img->webp_decoder) {
+        return img->webp_decoder->GetHeight();
+    }
+    if (img->type == FloodImage::CUSTOM_APNG && img->apng_decoder) {
+        return img->apng_decoder->GetHeight();
+    }
+    return img->obs_image.cy;
 }
 
 
@@ -165,6 +306,7 @@ static void flood_tuber_defaults(obs_data_t *settings)
 {
 	obs_data_set_default_double(settings, "threshold", -30.0);
 	obs_data_set_default_int(settings, "release_delay", 200);
+	obs_data_set_default_double(settings, "talking_speed", 0.10);
 
 	obs_data_set_default_int(settings, "action_duration", 4000);
 	obs_data_set_default_int(settings, "action_interval_min", 60000);
@@ -209,15 +351,15 @@ static void flood_tuber_destroy(void *d)
 		obs_source_release(data->audio_source);
 	}
 	obs_enter_graphics();
-	gs_image_file_free(&data->image_idle);
-	gs_image_file_free(&data->image_blink);
-	gs_image_file_free(&data->image_action);
-	gs_image_file_free(&data->image_talking_1);
-	gs_image_file_free(&data->image_talking_2);
-	gs_image_file_free(&data->image_talking_3);
-	gs_image_file_free(&data->image_talking_1_blink);
-	gs_image_file_free(&data->image_talking_2_blink);
-	gs_image_file_free(&data->image_talking_3_blink);
+	data->image_idle.Free();
+	data->image_blink.Free();
+	data->image_action.Free();
+	data->image_talking_1.Free();
+	data->image_talking_2.Free();
+	data->image_talking_3.Free();
+	data->image_talking_1_blink.Free();
+	data->image_talking_2_blink.Free();
+	data->image_talking_3_blink.Free();
 	obs_leave_graphics();
 	bfree(data);
 }
@@ -267,6 +409,8 @@ static void flood_tuber_update(void *data_ptr, obs_data_t *settings)
 	data->effect_speed = (float)obs_data_get_int(settings, "motion_speed") / 100.0f;
 	data->effect_strength = (float)obs_data_get_int(settings, "motion_strength");
 	data->mirror = obs_data_get_bool(settings, "mirror");
+	data->talk_interval = (float)obs_data_get_double(settings, "talking_speed");
+	if (data->talk_interval < 0.01f) data->talk_interval = 0.01f;
 
 	const char *audio_source_name = obs_data_get_string(settings, "audio_source");
 	obs_source_t *new_audio_source = obs_get_source_by_name(audio_source_name);
@@ -284,6 +428,25 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
 
+	// Tick animations for all images (for GIF/APNG support)
+	// gs_image_file_tick expects time in nanoseconds (uint64_t)
+	// seconds (float) * 1,000,000,000 = nanoseconds
+	uint64_t elapsed_ns = (uint64_t)(seconds * 1000000000.0f);
+
+    obs_enter_graphics(); // Required for standard texture updates
+	
+    flood_image_tick(&data->image_idle, elapsed_ns);
+	flood_image_tick(&data->image_blink, elapsed_ns);
+	flood_image_tick(&data->image_action, elapsed_ns);
+	flood_image_tick(&data->image_talking_1, elapsed_ns);
+	flood_image_tick(&data->image_talking_2, elapsed_ns);
+	flood_image_tick(&data->image_talking_3, elapsed_ns);
+	flood_image_tick(&data->image_talking_1_blink, elapsed_ns);
+	flood_image_tick(&data->image_talking_2_blink, elapsed_ns);
+	flood_image_tick(&data->image_talking_3_blink, elapsed_ns);
+    
+    obs_leave_graphics();
+	
 	float magnitude = data->current_db;
 	bool raw_talking = (magnitude > data->threshold) && (magnitude > -95.0f);
 
@@ -301,7 +464,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 
 	if (data->current_state == AvatarState::TALKING) {
 		data->timer_talk_anim += seconds;
-		if (data->timer_talk_anim > 0.10f) {
+		if (data->timer_talk_anim > data->talk_interval) {
 			data->talking_frame_index = (data->talking_frame_index + 1) % 3;
 			data->timer_talk_anim = 0.0f;
 		}
@@ -327,7 +490,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 		}
 	}
 
-	if (data->image_blink.texture) {
+	if (flood_image_get_texture(&data->image_blink)) {
 		data->timer_blink += seconds;
 
 		if (!data->is_blinking_now && data->timer_blink >= data->time_until_next_blink) {
@@ -370,20 +533,19 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
-	gs_texture_t *tex = data->image_idle.texture;
+	gs_texture_t *tex = flood_image_get_texture(&data->image_idle);
 
-	if (data->current_state == AvatarState::ACTION && data->image_action.texture) {
-		tex = data->image_action.texture;
+	if (data->current_state == AvatarState::ACTION && flood_image_get_texture(&data->image_action)) {
+		tex = flood_image_get_texture(&data->image_action);
 	} 
 	else if (data->current_state == AvatarState::TALKING) {
 		bool blink = data->is_blinking_now;
 		
-		
 		int idx = data->talking_frame_index;
-		gs_image_file_t *talk_img = nullptr;
-		gs_image_file_t *talk_blink_img = nullptr;
+		FloodImage *talk_img = nullptr;
+		FloodImage *talk_blink_img = nullptr;
 
-		// Select based on index, falling back to lower indices if current is missing
+		// Select based on index
 		if (idx == 0) {
 			talk_img = &data->image_talking_1;
 			talk_blink_img = &data->image_talking_1_blink;
@@ -395,34 +557,34 @@ static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 			talk_blink_img = &data->image_talking_3_blink;
 		}
 
-		// Fallbacks: If 3 is missing, try 2. If 2 missing, try 1.
-		if (!talk_img->texture && idx == 2) {
+		// Fallbacks
+		if (!flood_image_get_texture(talk_img) && idx == 2) {
              talk_img = &data->image_talking_2;
              talk_blink_img = &data->image_talking_2_blink;
              idx = 1;
         }
-		if (!talk_img->texture && idx == 1) {
+		if (!flood_image_get_texture(talk_img) && idx == 1) {
              talk_img = &data->image_talking_1;
              talk_blink_img = &data->image_talking_1_blink;
         }
 
 		// Determine final texture
-		if (blink && talk_blink_img && talk_blink_img->texture) {
-			tex = talk_blink_img->texture;
-		} else if (talk_img && talk_img->texture) {
-			tex = talk_img->texture;
+		if (blink && talk_blink_img && flood_image_get_texture(talk_blink_img)) {
+			tex = flood_image_get_texture(talk_blink_img);
+		} else if (talk_img && flood_image_get_texture(talk_img)) {
+			tex = flood_image_get_texture(talk_img);
 		}
 
 		// Final fallback for blinking if specific talk-blink is missing
-		if (blink && (!talk_blink_img || !talk_blink_img->texture) && data->image_blink.texture) {
-			tex = data->image_blink.texture;
+		if (blink && (!talk_blink_img || !flood_image_get_texture(talk_blink_img)) && flood_image_get_texture(&data->image_blink)) {
+			tex = flood_image_get_texture(&data->image_blink);
 		}
 	} 
 	else {
-		if (data->is_blinking_now && data->image_blink.texture) {
-			tex = data->image_blink.texture;
+		if (data->is_blinking_now && flood_image_get_texture(&data->image_blink)) {
+			tex = flood_image_get_texture(&data->image_blink);
 		} else {
-			tex = data->image_idle.texture;
+			tex = flood_image_get_texture(&data->image_idle);
 		}
 	}
 
@@ -441,12 +603,14 @@ static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 static uint32_t flood_tuber_get_width(void *data_ptr)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
-	return data->image_idle.cx ? data->image_idle.cx : 500;
+    uint32_t w = flood_image_get_width(&data->image_idle);
+	return w ? w : 500;
 }
 static uint32_t flood_tuber_get_height(void *data_ptr)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
-	return data->image_idle.cy ? data->image_idle.cy : 500;
+    uint32_t h = flood_image_get_height(&data->image_idle);
+	return h ? h : 500;
 }
 static const char *flood_tuber_get_name(void *unused)
 {
@@ -524,7 +688,7 @@ static bool load_avatar(obs_properties_t *props, obs_property_t *p, void *data)
 static void add_file_prop(obs_properties_t *props, const char *name, const char *desc)
 {
 	obs_properties_add_path(props, name, desc, OBS_PATH_FILE,
-				"Image Files (*.bmp *.jpg *.jpeg *.tga *.png *.gif);;All Files (*.*)", NULL);
+				"Image Files (*.bmp *.jpg *.jpeg *.tga *.png *.gif *.webp *.apng);;All Files (*.*)", NULL);
 }
 
 // Properties: Defines the configuration UI in OBS
@@ -599,6 +763,9 @@ static obs_properties_t *flood_tuber_properties(void *data)
 	obs_property_t *p_release = obs_properties_add_int(props, "release_delay", obs_module_text("release_delay"), 0, 10000, 10);
 	obs_property_set_long_description(p_release, obs_module_text("release_delay_tooltip"));
 
+	obs_property_t *p_speed = obs_properties_add_float_slider(props, "talking_speed", obs_module_text("talking_speed"), 0.01, 1.0, 0.01);
+	obs_property_set_long_description(p_speed, obs_module_text("talking_speed_tooltip"));
+
 	obs_properties_t *blink_group = obs_properties_create();
 	obs_properties_add_group(props, "blink_settings", obs_module_text("blink_settings"), OBS_GROUP_NORMAL, blink_group);
 	
@@ -666,8 +833,8 @@ bool obs_module_load(void)
 	flood_tuber_info.icon_type = OBS_ICON_TYPE_AUDIO_INPUT;
 
 	obs_register_source(&flood_tuber_info);
-#define FLOOD_TUBER_VERSION "0.1.0"
-	blog(LOG_INFO, "[Flood-Tuber] Loaded successfully! Version: %s", FLOOD_TUBER_VERSION);
+#define FLOOD_TUBER_VERSION "0.2.0"
+	blog(LOG_INFO, "[Flood-Tuber] Loaded successfully! Version: %s (Build: " __DATE__ " " __TIME__ ")", FLOOD_TUBER_VERSION);
 	return true;
 }
 //.obs_module_unload
