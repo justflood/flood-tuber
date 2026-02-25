@@ -1,2 +1,1 @@
-#!/usr/bin/env zsh
-"${0:A:h}/.package.zsh" "$@"
+.package.zsh
