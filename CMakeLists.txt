@@ -67,6 +67,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     lodepng.h
 )
 
+set_source_files_properties(lodepng.cpp PROPERTIES COMPILE_OPTIONS "-w")
+
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE webp webpdemux)
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
