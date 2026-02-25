@@ -45,7 +45,7 @@ static bool check_file_signature(const char *path) {
     // Allow others if we are brave, but for GIF specifically we MUST validate 
     // because OBS crashes on corrupt GIFs.
     const char *ext = strrchr(path, '.');
-    if (ext && _strcmpi(ext, ".gif") == 0) {
+    if (ext && strcasecmp(ext, ".gif") == 0) {
         return false; // Extension says GIF but header doesn't match
     }
 
@@ -160,6 +160,7 @@ static uint32_t flood_image_get_height(FloodImage *img) {
 // Callback: Processes audio data to calculate volume levels (dB)
 static void audio_callback(void *data_ptr, obs_source_t *source, const struct audio_data *audio_data, bool muted)
 {
+	(void)source;
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
 	if (muted) {
 		data->current_db = -100.0f;
@@ -338,7 +339,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 				int range = (int)(data->action_interval_max - data->action_interval_min);
 				if (range <= 0)
 					range = 1;
-				data->time_until_next_action = data->action_interval_min + (rand() % range);
+				data->time_until_next_action = data->action_interval_min + static_cast<float>(rand() % range);
 			}
 		} else {
 			data->timer_action += seconds;
@@ -363,7 +364,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 			int range = (int)(data->blink_interval_max - data->blink_interval_min);
 			if (range <= 0)
 				range = 1;
-			data->time_until_next_blink = data->blink_interval_min + (rand() % range);
+			data->time_until_next_blink = data->blink_interval_min + static_cast<float>(rand() % range);
 		}
 	} else {
 		data->is_blinking_now = false;
@@ -473,6 +474,7 @@ static uint32_t flood_tuber_get_height(void *data_ptr)
 }
 static const char *flood_tuber_get_name(void *unused)
 {
+	(void)unused;
 	return "Flood Tuber Avatar";
 }
 
