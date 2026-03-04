@@ -27,3 +27,8 @@ Makefile
 Thumbs.db
 
 .vscode/
+
+# Test files
+ovr-test/
+
+docs/
