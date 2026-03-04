@@ -2,6 +2,8 @@
 
 # Flood Tuber - OBS Plugin
 
+[![Discord](https://img.shields.io/badge/Discord-Join_the_Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/wm5qPpYe9A)
+
 **Flood Tuber** is a lightweight OBS Studio plugin that brings your streams to life with reactive PNGTuber avatars. It detects your microphone's audio levels to animate your avatar with talking, blinking, and random action states, adding dynamism to your content without complex setups.
 
 ## Features
@@ -71,6 +73,16 @@ I offer two installation methods:
     *   *(Optional)* `talk_a_blink.png` etc. for blinking while talking.
 4.  *(Optional)* Copy a `settings.ini` from another avatar to fine-tune default settings for this character.
 5.  In OBS, select your new folder from the list and click Load!
+
+## 💬 Community & Support
+
+Need help setting up your avatars, want to share your custom creations, or have a brilliant idea for a new feature? 
+
+Join the official **Flood Tuber** Discord server! It's the best place to get direct support, report bugs, and hang out with other users.
+
+<a href="https://discord.gg/wm5qPpYe9A">
+  <img src="https://img.shields.io/badge/Join%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white&scale=2" alt="Join Flood Tuber Discord">
+</a>
 
 ## License
 
