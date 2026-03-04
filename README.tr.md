@@ -2,6 +2,8 @@
 
 # Flood Tuber - OBS Eklentisi
 
+[![Discord](https://img.shields.io/badge/Discord-Join_the_Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/wm5qPpYe9A)
+
 **Flood Tuber**, yayınlarınıza hayat katan, hafif ve güçlü bir tepkisel PNGTuber avatar eklentisidir. Mikrofonunuzun ses seviyesini algılayarak avatarınızı konuşma, göz kırpma ve rastgele aksiyon durumlarıyla canlandırır, yayınlarınıza karmaşık kurulumlar olmadan dinamizm katar.
 
 ## Özellikler
@@ -71,6 +73,16 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
     *   *(İsteğe bağlı)* Konuşurken göz kırpmak için `talk_a_blink.png` vb.
 4.  *(İsteğe bağlı)* Varsayılan ayarları değiştirmek isterseniz başka bir avatardan `settings.ini` dosyasını kopyalayıp düzenleyin.
 5.  OBS'de listeden yeni klasörünüzü seçin ve Yükle butonuna basın!
+
+## 💬 Topluluk ve Destek
+
+Avatarlarınızı ayarlarken yardıma mı ihtiyacınız var? Kendi özel tasarımlarınızı diğer yayıncılarla paylaşmak veya yeni bir özellik için harika bir fikir mi sunmak istiyorsunuz?
+
+Resmi **Flood Tuber** Discord sunucusuna katılın! Doğrudan destek almak, karşılaştığınız hataları bildirmek ve topluluktaki diğer insanlarla takılmak için en doğru yer burası.
+
+<a href="https://discord.gg/wm5qPpYe9A">
+  <img src="https://img.shields.io/badge/Discord'a%20Katıl-5865F2?style=for-the-badge&logo=discord&logoColor=white&scale=2" alt="Flood Tuber Discord'a Katıl">
+</a>
 
 ## Lisans
 
