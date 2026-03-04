@@ -4,9 +4,7 @@
 #include <math.h>
 
 
-// Helper: Loads an image file and initializes its texture
-// Helper: Loads an image file (Standard or WebP)
-// Helper: Validates file headers to prevent crashes (e.g. renamed .txt files)
+// Validate file headers to prevent crashes (e.g. renamed .txt files)
 static bool check_file_signature(const char *path) {
     if (!path || !*path) return false;
     
@@ -52,7 +50,7 @@ static bool check_file_signature(const char *path) {
     return true; // Let OBS try other formats (BMP, TGA etc) if not explicitly suspicious
 }
 
-// Helper: Loads an image file and initializes its texture
+// Loads an image file and initializes its texture
 static void update_image(FloodImage *image, const char *path)
 {
 	obs_enter_graphics();
@@ -287,9 +285,8 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
 
-	// Tick animations for all images (for GIF/APNG support)
-	// gs_image_file_tick expects time in nanoseconds (uint64_t)
-	// seconds (float) * 1,000,000,000 = nanoseconds
+	// Tick animations for all images
+	// Convert seconds to nanoseconds for gs_image_file_tick
 	uint64_t elapsed_ns = (uint64_t)(seconds * 1000000000.0f);
 
     obs_enter_graphics(); // Required for standard texture updates

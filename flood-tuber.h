@@ -8,7 +8,7 @@
 #include "webp-decoder.h"
 #include "apng-decoder.h"
 
-#define FLOOD_TUBER_VERSION "1.0.0"
+#define FLOOD_TUBER_VERSION "1.0.2"
 #define BLOG(level, format, ...) blog(level, "[Flood-Tuber] " format, ##__VA_ARGS__)
 
 // Represents the current animation state of the avatar

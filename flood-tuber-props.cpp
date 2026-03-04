@@ -236,6 +236,17 @@ static bool open_github_page(obs_properties_t *props, obs_property_t *p, void *d
 	return false;
 }
 
+// Opens the Flood Tuber website
+static bool open_website_page(obs_properties_t *props, obs_property_t *p, void *data)
+{
+	(void)props; (void)p; (void)data;
+#ifdef _WIN32
+	ShellExecuteA(NULL, "open", "https://floodtechlab.com/floodtuber/",
+	              NULL, NULL, SW_SHOWNORMAL);
+#endif
+	return false;
+}
+
 // Hides speed/strength sliders when motion effect is "None"
 static bool on_motion_type_changed(obs_properties_t *props, obs_property_t *p,
                                    obs_data_t *settings)
@@ -255,7 +266,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 	struct flood_tuber_data *tuber = (struct flood_tuber_data *)data;
 	obs_properties_t *props = obs_properties_create();
 
-	// ── 1. Avatar Library  (first — typical first step) ───────────────────
+	// ── 1. Avatar Library ───────────────────
 	obs_properties_t *lib = obs_properties_create();
 	obs_properties_add_group(props, "library_group",
 		obs_module_text("library_group"), OBS_GROUP_NORMAL, lib);
@@ -297,7 +308,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 	add_file_prop(img, "path_action", obs_module_text("path_action"), obs_module_text("path_action_tooltip"));
 	obs_properties_add_button(img, "clear_action", clear_txt, clear_action);
 
-	// Talking frames — each frame immediately followed by its blink variant
+	// Talking frames
 	add_file_prop(img, "path_talk_1",       obs_module_text("path_talk_1"),       obs_module_text("path_talk_1_tooltip"));
 	obs_properties_add_button(img, "clear_talk_1",       clear_txt, clear_talk_1);
 	add_file_prop(img, "path_talk_1_blink", obs_module_text("path_talk_1_blink"), obs_module_text("path_talk_1_blink_tooltip"));
@@ -415,6 +426,8 @@ obs_properties_t *flood_tuber_properties(void *data)
 
 	obs_properties_add_text(about, "about_version", NULL, OBS_TEXT_INFO);
 	obs_properties_add_text(about, "about_author",  NULL, OBS_TEXT_INFO);
+	obs_properties_add_button(about, "about_website_btn",
+		obs_module_text("about_website_btn"), open_website_page);
 	obs_properties_add_button(about, "about_github_btn",
 		obs_module_text("about_github_btn"), open_github_page);
 

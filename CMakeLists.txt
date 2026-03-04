@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.22...3.25)
-project(flood-tuber VERSION 1.0.0)
+project(flood-tuber VERSION 1.0.2)
 
-# 1. OBS 30 Modern Plugin Tanımlaması
-obs_add_plugin(flood-tuber)
+# 1. Plugin Definition
+add_library(flood-tuber MODULE)
+set_target_properties_obs(flood-tuber PROPERTIES FOLDER plugins PREFIX "")
 
-# 2. Bağımlılıklar (libwebp) - Senin kodunla aynı, sadece yeri düzenlendi
+# 2. Dependencies (libwebp)
 include(FetchContent)
 FetchContent_Declare(
     libwebp
@@ -22,7 +23,7 @@ set(WEBP_BUILD_WEBPMUX OFF CACHE BOOL "" FORCE)
 set(WEBP_BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(libwebp)
 
-# 3. Kaynak Dosyaların Eklenmesi
+# 3. Source Files
 target_sources(flood-tuber PRIVATE
     flood-tuber.cpp
     flood-tuber.h
@@ -36,14 +37,24 @@ target_sources(flood-tuber PRIVATE
     apng-decoder.h
 )
 
-# 4. Kütüphanelerin Bağlanması (DİKKAT: libobs yerine OBS::libobs kullanıyoruz)
+# 4. Libraries (Link OBS::libobs)
 target_link_libraries(flood-tuber PRIVATE
     OBS::libobs
     webp
     webpdemux
 )
 
-# 5. Data Klasörünün Otomatik Kopyalanması (O uzun custom_command ameleliğinin bittiği yer)
+# 5. Data directory copy
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data")
-    obs_add_plugin_data(flood-tuber "${CMAKE_CURRENT_SOURCE_DIR}/data")
+    file(GLOB_RECURSE data_files "${CMAKE_CURRENT_SOURCE_DIR}/data/*")
+    foreach(data_file ${data_files})
+        file(RELATIVE_PATH dest_file "${CMAKE_CURRENT_SOURCE_DIR}/data" "${data_file}")
+        get_filename_component(dest_dir "${dest_file}" DIRECTORY)
+        add_custom_command(
+            TARGET flood-tuber POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/obs-plugins/flood-tuber/${dest_dir}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${data_file}" "${CMAKE_BINARY_DIR}/data/obs-plugins/flood-tuber/${dest_file}"
+            VERBATIM
+        )
+    endforeach()
 endif()
