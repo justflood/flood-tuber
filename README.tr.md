@@ -2,12 +2,6 @@
 
 # Flood Tuber - OBS Eklentisi
 
-> **🚧 Beta Sürüm Bildirimi**
-> Bu eklenti şu anda **Beta** aşamasındadır. Tek kişilik bir geliştirici olarak (ben), geri bildirimleriniz benim için çok değerli!
->
-> Eğer bir hatayla karşılaşırsanız veya eklenmesini istediğiniz bir özellik varsa (ne kadar karmaşık olursa olsun!), lütfen GitHub Issues üzerinden belirtmekten çekinmeyin. Her öneriyi not alıyor ve bu eklentiyi geliştirmek için üzerinde çalışıyorum.
-> **[Github Issues](https://github.com/justflood/flood-tuber/issues)**
-
 **Flood Tuber**, yayınlarınıza hayat katan, hafif ve güçlü bir tepkisel PNGTuber avatar eklentisidir. Mikrofonunuzun ses seviyesini algılayarak avatarınızı konuşma, göz kırpma ve rastgele aksiyon durumlarıyla canlandırır, yayınlarınıza karmaşık kurulumlar olmadan dinamizm katar.
 
 ## Özellikler
