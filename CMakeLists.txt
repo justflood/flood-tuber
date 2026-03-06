@@ -29,6 +29,8 @@ target_sources(flood-tuber PRIVATE
     flood-tuber.h
     flood-tuber-props.cpp
     flood-tuber-props.h
+    flood-tuber-lipsync.cpp
+    flood-tuber-lipsync.h
     webp-decoder.cpp
     webp-decoder.h
     lodepng.cpp
@@ -37,11 +39,15 @@ target_sources(flood-tuber PRIVATE
     apng-decoder.h
 )
 
-# 4. Libraries (Link OBS::libobs)
+# 4. Libraries (Link OBS::libobs + OVR LipSync Shim)
+target_include_directories(flood-tuber PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/ovr-test/Include
+)
 target_link_libraries(flood-tuber PRIVATE
     OBS::libobs
     webp
     webpdemux
+    ${CMAKE_CURRENT_SOURCE_DIR}/ovr-test/Lib/Win64/OVRLipSyncShim.lib
 )
 
 # 5. Data directory copy

@@ -1,106 +1,11 @@
 #include "flood-tuber.h"
 #include "flood-tuber-props.h"
+#include "flood-tuber-lipsync.h"
 #include <util/dstr.h>
 #include <math.h>
 
 
-// Validate file headers to prevent crashes (e.g. renamed .txt files)
-static bool check_file_signature(const char *path) {
-    if (!path || !*path) return false;
-    
-    FILE *f = fopen(path, "rb");
-    if (!f) return false;
-    
-    unsigned char sig[12] = {0};
-    size_t len = fread(sig, 1, 12, f);
-    fclose(f);
-    
-    if (len < 4) return false; // Too small to be valid image
-
-    // Check GIF: "GIF87a" or "GIF89a"
-    if (len >= 6 && sig[0] == 'G' && sig[1] == 'I' && sig[2] == 'F' && 
-        sig[3] == '8' && (sig[4] == '7' || sig[4] == '9') && sig[5] == 'a') {
-        return true; 
-    }
-
-    // Check PNG: 89 50 4E 47 0D 0A 1A 0A
-    if (len >= 8 && sig[0] == 0x89 && sig[1] == 0x50 && sig[2] == 0x4E && sig[3] == 0x47 &&
-        sig[4] == 0x0D && sig[5] == 0x0A && sig[6] == 0x1A && sig[7] == 0x0A) {
-        return true;
-    }
-
-    // Check WebP: RIFF .... WEBP
-    if (len >= 12 && sig[0] == 'R' && sig[1] == 'I' && sig[2] == 'F' && sig[3] == 'F' &&
-        sig[8] == 'W' && sig[9] == 'E' && sig[10] == 'B' && sig[11] == 'P') {
-        return true;
-    }
-
-    // Check JPEG: FF D8 FF
-    if (len >= 3 && sig[0] == 0xFF && sig[1] == 0xD8 && sig[2] == 0xFF) {
-        return true;
-    }
-
-    // Allow others if we are brave, but for GIF specifically we MUST validate 
-    // because OBS crashes on corrupt GIFs.
-    const char *ext = strrchr(path, '.');
-    if (ext && _strcmpi(ext, ".gif") == 0) {
-        return false; // Extension says GIF but header doesn't match
-    }
-
-    return true; // Let OBS try other formats (BMP, TGA etc) if not explicitly suspicious
-}
-
-// Loads an image file and initializes its texture
-static void update_image(FloodImage *image, const char *path)
-{
-	obs_enter_graphics();
-	image->Free();
-    
-    if (path && *path) {
-        if (!check_file_signature(path)) {
-            blog(LOG_WARNING, "Invalid file signature (corrupt or fake file?): %s", path);
-        } else {
-            const char *ext = strrchr(path, '.');
-            bool is_webp = (ext && (_strcmpi(ext, ".webp") == 0));
-            
-            if (is_webp) {
-                image->type = FloodImage::CUSTOM_WEBP;
-                image->webp_decoder = new WebPDecoder();
-                if (!image->webp_decoder->Load(path)) {
-                     blog(LOG_WARNING, "Failed to load WebP: %s", path);
-                     image->Free();
-                } else {
-                     blog(LOG_INFO, "Loaded WebP: %s", path);
-                }
-            } else if (ext && (_strcmpi(ext, ".apng") == 0 || _strcmpi(ext, ".png") == 0)) {
-                // Check if it's an animated PNG
-                APNGDecoder *temp_decoder = new APNGDecoder();
-                if (temp_decoder->Load(path) && temp_decoder->IsAnimated()) {
-                     image->type = FloodImage::CUSTOM_APNG;
-                     image->apng_decoder = temp_decoder;
-                     blog(LOG_INFO, "Loaded Animated PNG: %s", path);
-                } else {
-                     if (temp_decoder->IsAnimated())
-                         blog(LOG_WARNING, "Failed to load APNG (corrupt?): %s", path);
-                     
-                     // Clean up checks
-                     delete temp_decoder;
-                     
-                     // Fallback to standard OBS loader for static PNGs or if APNG load failed
-                     image->type = FloodImage::OBS_STANDARD;
-                     gs_image_file_init(&image->obs_image, path);
-                     gs_image_file_init_texture(&image->obs_image);
-                }
-            } else {
-                image->type = FloodImage::OBS_STANDARD;
-                gs_image_file_init(&image->obs_image, path);
-                gs_image_file_init_texture(&image->obs_image);
-            }
-        }
-    }
-    image->anim_time_ns = 0;
-	obs_leave_graphics();
-}
+// Common loading scripts moved to flood-tuber.h
 
 static void flood_image_tick(FloodImage *img, uint64_t elapsed_ns) {
     if (img->type == FloodImage::CUSTOM_WEBP) {
@@ -496,10 +401,17 @@ bool obs_module_load(void)
 	flood_tuber_info.get_properties = flood_tuber_properties;
 	flood_tuber_info.get_defaults = flood_tuber_defaults;
 	flood_tuber_info.icon_type = OBS_ICON_TYPE_AUDIO_INPUT;
-
 	obs_register_source(&flood_tuber_info);
+    
+    // YENI LIPSYNC KAYNAGINI KAYDET (FAZ 1)
+    extern void register_lipsync_source();
+    register_lipsync_source();
+
 	blog(LOG_INFO, "[Flood-Tuber] v" FLOOD_TUBER_VERSION " loaded. (Build: " __DATE__ " " __TIME__ ")");
 	return true;
 }
 //.obs_module_unload
-void obs_module_unload(void) {}
+void obs_module_unload(void) {
+    extern void unload_lipsync_source();
+    unload_lipsync_source();
+}
