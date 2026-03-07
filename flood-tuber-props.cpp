@@ -3,11 +3,61 @@
 #include <util/dstr.h>
 #include <util/config-file.h>
 #include <util/platform.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
 #endif
+
+// Returns the custom avatars folder path from source settings.
+// Returns NULL if not set. Do NOT free the returned pointer.
+static const char *get_custom_dir(obs_data_t *settings)
+{
+	const char *path = obs_data_get_string(settings, "custom_avatars_path");
+	return (path && *path) ? path : NULL;
+}
+
+// Resolves full path for a given avatar name.
+// Checks custom dir first, falls back to built-in data dir.
+// Caller must bfree() the returned pointer.
+static char *resolve_avatar_dir(const char *avatar_name, obs_data_t *settings)
+{
+	// 1. Check custom dir first
+	const char *custom = get_custom_dir(settings);
+	if (custom) {
+		struct dstr user_path = {0};
+		dstr_copy(&user_path, custom);
+		dstr_cat(&user_path, "/");
+		dstr_cat(&user_path, avatar_name);
+
+		// Only use custom dir if it has actual image files
+		struct dstr idle_check = {0};
+		dstr_copy(&idle_check, user_path.array);
+		dstr_cat(&idle_check, "/idle.png");
+		bool has_images = os_file_exists(idle_check.array);
+		dstr_free(&idle_check);
+
+		if (has_images) {
+			BLOG(LOG_DEBUG, "resolve: found custom avatar: %s", user_path.array);
+			char *result = bstrdup(user_path.array);
+			dstr_free(&user_path);
+			return result;
+		}
+		dstr_free(&user_path);
+	}
+
+	// 2. Fall back to built-in data dir
+	struct dstr rel = {0};
+	dstr_catf(&rel, "avatars/%s", avatar_name);
+	char *data_path = obs_module_file(rel.array);
+	dstr_free(&rel);
+	if (data_path)
+		BLOG(LOG_DEBUG, "resolve: found built-in avatar: %s", data_path);
+	else
+		BLOG(LOG_WARNING, "resolve: avatar not found: %s", avatar_name);
+	return data_path;
+}
 
 
 // Enumerate audio sources for the dropdown list
@@ -27,8 +77,8 @@ static bool enum_audio_sources(void *data, obs_source_t *source)
 // as_default=false → sets *current* values (load via UI)
 void apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, bool as_default)
 {
-	struct dstr avatar_path = {0};
-	dstr_catf(&avatar_path, "avatars/%s", avatar_name);
+	char *base_dir = resolve_avatar_dir(avatar_name, settings);
+	if (!base_dir) return;
 
 	auto set_str = [&](const char *key, const char *val) {
 		if (as_default) obs_data_set_default_string(settings, key, val);
@@ -43,16 +93,12 @@ void apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, boo
 		else obs_data_set_double(settings, key, val);
 	};
 	auto set_img = [&](const char *key, const char *file) {
-		char *full_path = obs_module_file(avatar_path.array);
-		if (full_path) {
-			struct dstr final_path = {0};
-			dstr_copy(&final_path, full_path);
-			dstr_cat(&final_path, "/");
-			dstr_cat(&final_path, file);
-			set_str(key, os_file_exists(final_path.array) ? final_path.array : "");
-			dstr_free(&final_path);
-			bfree(full_path);
-		}
+		struct dstr final_path = {0};
+		dstr_copy(&final_path, base_dir);
+		dstr_cat(&final_path, "/");
+		dstr_cat(&final_path, file);
+		set_str(key, os_file_exists(final_path.array) ? final_path.array : "");
+		dstr_free(&final_path);
 	};
 
 	set_img("path_idle",         "idle.png");
@@ -65,51 +111,47 @@ void apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, boo
 	set_img("path_talk_2_blink", "talk_b_blink.png");
 	set_img("path_talk_3_blink", "talk_c_blink.png");
 
-	char *ini_path_raw = obs_module_file(avatar_path.array);
-	if (ini_path_raw) {
-		struct dstr ini_path = {0};
-		dstr_copy(&ini_path, ini_path_raw);
-		dstr_cat(&ini_path, "/settings.ini");
+	struct dstr ini_path = {0};
+	dstr_copy(&ini_path, base_dir);
+	dstr_cat(&ini_path, "/settings.ini");
 
-		config_t *config = NULL;
-		if (config_open(&config, ini_path.array, CONFIG_OPEN_EXISTING) == CONFIG_SUCCESS) {
-			auto load_dbl = [&](const char *s, const char *n, const char *k) {
-				if (config_has_user_value(config, s, n))
-					set_dbl(k, config_get_double(config, s, n));
-			};
-			auto load_int = [&](const char *s, const char *n, const char *k) {
-				if (config_has_user_value(config, s, n))
-					set_int(k, config_get_int(config, s, n));
-			};
-			auto load_str = [&](const char *s, const char *n, const char *k) {
-				if (config_has_user_value(config, s, n)) {
-					const char *v = config_get_string(config, s, n);
-					if (v) set_str(k, v);
-				}
-			};
+	config_t *config = NULL;
+	if (config_open(&config, ini_path.array, CONFIG_OPEN_EXISTING) == CONFIG_SUCCESS) {
+		auto load_dbl = [&](const char *s, const char *n, const char *k) {
+			if (config_has_user_value(config, s, n))
+				set_dbl(k, config_get_double(config, s, n));
+		};
+		auto load_int = [&](const char *s, const char *n, const char *k) {
+			if (config_has_user_value(config, s, n))
+				set_int(k, config_get_int(config, s, n));
+		};
+		auto load_str = [&](const char *s, const char *n, const char *k) {
+			if (config_has_user_value(config, s, n)) {
+				const char *v = config_get_string(config, s, n);
+				if (v) set_str(k, v);
+			}
+		};
 
-			load_dbl("Audio",  "threshold",    "threshold");
-			load_int("Audio",  "release_delay","release_delay");
-			load_int("Blink",  "duration",     "blink_duration");
-			load_int("Blink",  "interval_min", "blink_interval_min");
-			load_int("Blink",  "interval_max", "blink_interval_max");
-			load_int("Action", "duration",     "action_duration");
-			load_int("Action", "interval_min", "action_interval_min");
-			load_int("Action", "interval_max", "action_interval_max");
-			load_str("Motion", "type",         "motion_type");
-			load_int("Motion", "speed",        "motion_speed");
-			load_int("Motion", "strength",     "motion_strength");
+		load_dbl("Audio",  "threshold",    "threshold");
+		load_int("Audio",  "release_delay","release_delay");
+		load_int("Blink",  "duration",     "blink_duration");
+		load_int("Blink",  "interval_min", "blink_interval_min");
+		load_int("Blink",  "interval_max", "blink_interval_max");
+		load_int("Action", "duration",     "action_duration");
+		load_int("Action", "interval_min", "action_interval_min");
+		load_int("Action", "interval_max", "action_interval_max");
+		load_str("Motion", "type",         "motion_type");
+		load_int("Motion", "speed",        "motion_speed");
+		load_int("Motion", "strength",     "motion_strength");
 
-			if (config_has_user_value(config, "General", "mirror"))
-				obs_data_set_bool(settings, "mirror",
-					config_get_bool(config, "General", "mirror"));
+		if (config_has_user_value(config, "General", "mirror"))
+			obs_data_set_bool(settings, "mirror",
+				config_get_bool(config, "General", "mirror"));
 
-			config_close(config);
-		}
-		dstr_free(&ini_path);
-		bfree(ini_path_raw);
+		config_close(config);
 	}
-	dstr_free(&avatar_path);
+	dstr_free(&ini_path);
+	bfree(base_dir);
 }
 
 // Set plugin defaults on first load
@@ -133,6 +175,8 @@ void flood_tuber_defaults(obs_data_t *settings)
 
 	apply_avatar_to_settings(settings, "Flood Tuber Avatar", true);
 	obs_data_set_default_string(settings, "avatar_list", "Flood Tuber Avatar");
+	obs_data_set_default_string(settings, "custom_avatars_path", "");
+	obs_data_set_default_string(settings, "hint_custom_folder", obs_module_text("hint_custom_folder"));
 
 	// Group hint text (always-visible info boxes in the properties panel)
 	obs_data_set_default_string(settings, "hint_images", obs_module_text("hint_images"));
@@ -174,23 +218,264 @@ IMPLEMENT_CLEAR_CALLBACK(clear_talk_2_blink,  "path_talk_2_blink")
 IMPLEMENT_CLEAR_CALLBACK(clear_talk_3,        "path_talk_3")
 IMPLEMENT_CLEAR_CALLBACK(clear_talk_3_blink,  "path_talk_3_blink")
 
-// Opens the avatars folder in Windows Explorer
+// Writes current settings to a settings.ini file at the given directory path
+static void write_settings_ini(const char *dir_path, obs_data_t *settings)
+{
+	struct dstr ini_path = {0};
+	dstr_copy(&ini_path, dir_path);
+	dstr_cat(&ini_path, "/settings.ini");
+
+	config_t *config = NULL;
+	BLOG(LOG_DEBUG, "write_settings_ini: opening %s", ini_path.array);
+	if (config_open(&config, ini_path.array, CONFIG_OPEN_ALWAYS) == CONFIG_SUCCESS) {
+		const char *avatar_name = obs_data_get_string(settings, "avatar_list");
+		if (avatar_name && *avatar_name)
+			config_set_string(config, "General", "name", avatar_name);
+		config_set_bool(config, "General", "mirror",
+			obs_data_get_bool(settings, "mirror"));
+
+		config_set_double(config, "Audio", "threshold",
+			obs_data_get_double(settings, "threshold"));
+		config_set_int(config, "Audio", "release_delay",
+			(int)obs_data_get_int(settings, "release_delay"));
+
+		config_set_int(config, "Blink", "duration",
+			(int)obs_data_get_int(settings, "blink_duration"));
+		config_set_int(config, "Blink", "interval_min",
+			(int)obs_data_get_int(settings, "blink_interval_min"));
+		config_set_int(config, "Blink", "interval_max",
+			(int)obs_data_get_int(settings, "blink_interval_max"));
+
+		config_set_int(config, "Action", "duration",
+			(int)obs_data_get_int(settings, "action_duration"));
+		config_set_int(config, "Action", "interval_min",
+			(int)obs_data_get_int(settings, "action_interval_min"));
+		config_set_int(config, "Action", "interval_max",
+			(int)obs_data_get_int(settings, "action_interval_max"));
+
+		config_set_string(config, "Motion", "type",
+			obs_data_get_string(settings, "motion_type"));
+		config_set_int(config, "Motion", "speed",
+			(int)obs_data_get_int(settings, "motion_speed"));
+		config_set_int(config, "Motion", "strength",
+			(int)obs_data_get_int(settings, "motion_strength"));
+
+		config_save(config);
+		config_close(config);
+		BLOG(LOG_INFO, "write_settings_ini: saved successfully to %s", ini_path.array);
+	} else {
+		BLOG(LOG_ERROR, "write_settings_ini: config_open FAILED for %s", ini_path.array);
+	}
+	dstr_free(&ini_path);
+}
+
+// Copies a file from src to dst. Returns true on success.
+static bool copy_file_safe(const char *src, const char *dst)
+{
+	if (!src || !*src || !os_file_exists(src)) return false;
+
+	FILE *in = fopen(src, "rb");
+	if (!in) return false;
+
+	FILE *out = fopen(dst, "wb");
+	if (!out) { fclose(in); return false; }
+
+	char buf[8192];
+	size_t n;
+	while ((n = fread(buf, 1, sizeof(buf), in)) > 0)
+		fwrite(buf, 1, n, out);
+
+	fclose(in);
+	fclose(out);
+	return true;
+}
+
+// Saves current settings to the selected avatar's settings.ini
+static bool save_settings_to_avatar(obs_properties_t *props, obs_property_t *p, void *data)
+{
+	(void)props; (void)p;
+	struct flood_tuber_data *tuber = (struct flood_tuber_data *)data;
+	if (!tuber || !tuber->source) return false;
+
+	obs_data_t *settings = obs_source_get_settings(tuber->source);
+	if (!settings) return false;
+
+	const char *selected = obs_data_get_string(settings, "avatar_list");
+	if (!selected || !*selected) {
+		BLOG(LOG_WARNING, "save_settings: no avatar selected");
+		obs_data_release(settings);
+		return false;
+	}
+
+	// Resolve where the avatar currently lives
+	char *source_dir = resolve_avatar_dir(selected, settings);
+	if (!source_dir) {
+		BLOG(LOG_ERROR, "save_settings: cannot resolve avatar dir for '%s'", selected);
+		obs_data_release(settings);
+		return false;
+	}
+
+	// Determine target dir: custom dir if set, otherwise save next to source
+	const char *custom = get_custom_dir(settings);
+	struct dstr target_dir = {0};
+
+	if (custom) {
+		// Save to custom dir
+		dstr_copy(&target_dir, custom);
+		dstr_cat(&target_dir, "/");
+		dstr_cat(&target_dir, selected);
+		os_mkdirs(target_dir.array);
+
+		// If source is from data dir (built-in), copy images to custom dir
+		if (strcmp(source_dir, target_dir.array) != 0) {
+			BLOG(LOG_INFO, "save_settings: copying images from %s to %s", source_dir, target_dir.array);
+			const char *files[] = {
+				"idle.png", "blink.png", "action.png",
+				"talk_a.png", "talk_b.png", "talk_c.png",
+				"talk_a_blink.png", "talk_b_blink.png", "talk_c_blink.png",
+				NULL
+			};
+			for (int i = 0; files[i]; i++) {
+				struct dstr src = {0}, dst = {0};
+				dstr_copy(&src, source_dir);
+				dstr_cat(&src, "/");
+				dstr_cat(&src, files[i]);
+				dstr_copy(&dst, target_dir.array);
+				dstr_cat(&dst, "/");
+				dstr_cat(&dst, files[i]);
+				copy_file_safe(src.array, dst.array);
+				dstr_free(&src);
+				dstr_free(&dst);
+			}
+		}
+	} else {
+		// No custom dir: write settings.ini next to source
+		dstr_copy(&target_dir, source_dir);
+	}
+
+	write_settings_ini(target_dir.array, settings);
+	BLOG(LOG_INFO, "save_settings: saved to %s", target_dir.array);
+
+	dstr_free(&target_dir);
+	bfree(source_dir);
+	obs_data_release(settings);
+	return true;
+}
+
+// Saves current config as a brand new avatar in the custom directory
+static bool save_as_new_avatar(obs_properties_t *props, obs_property_t *p, void *data)
+{
+	(void)p;
+	struct flood_tuber_data *tuber = (struct flood_tuber_data *)data;
+	if (!tuber || !tuber->source) return false;
+
+	obs_data_t *settings = obs_source_get_settings(tuber->source);
+	if (!settings) return false;
+
+	const char *raw_name = obs_data_get_string(settings, "new_avatar_name");
+	if (!raw_name || !*raw_name) {
+		BLOG(LOG_WARNING, "save_as_new: avatar name is empty");
+		obs_data_release(settings);
+		return false;
+	}
+
+	// Copy name string since we'll modify settings before using it
+	char *new_name = bstrdup(raw_name);
+
+	const char *custom = get_custom_dir(settings);
+	if (!custom) {
+		BLOG(LOG_WARNING, "save_as_new: no custom folder set");
+		bfree(new_name);
+		obs_data_release(settings);
+		return false;
+	}
+
+	BLOG(LOG_INFO, "save_as_new: saving '%s' to '%s'", new_name, custom);
+
+	struct dstr avatar_dir = {0};
+	dstr_copy(&avatar_dir, custom);
+	dstr_cat(&avatar_dir, "/");
+	dstr_cat(&avatar_dir, new_name);
+	os_mkdirs(avatar_dir.array);
+
+	// Copy current images to the new avatar folder
+	struct { const char *key; const char *filename; } img_map[] = {
+		{"path_idle",         "idle.png"},
+		{"path_blink",        "blink.png"},
+		{"path_action",       "action.png"},
+		{"path_talk_1",       "talk_a.png"},
+		{"path_talk_2",       "talk_b.png"},
+		{"path_talk_3",       "talk_c.png"},
+		{"path_talk_1_blink", "talk_a_blink.png"},
+		{"path_talk_2_blink", "talk_b_blink.png"},
+		{"path_talk_3_blink", "talk_c_blink.png"},
+		{NULL, NULL}
+	};
+
+	for (int i = 0; img_map[i].key; i++) {
+		const char *src = obs_data_get_string(settings, img_map[i].key);
+		if (!src || !*src) continue;
+
+		struct dstr dst = {0};
+		dstr_copy(&dst, avatar_dir.array);
+		dstr_cat(&dst, "/");
+		dstr_cat(&dst, img_map[i].filename);
+		if (copy_file_safe(src, dst.array))
+			BLOG(LOG_DEBUG, "save_as_new: copied %s", img_map[i].filename);
+		else
+			BLOG(LOG_WARNING, "save_as_new: failed to copy %s", img_map[i].filename);
+		dstr_free(&dst);
+	}
+
+	// Save settings.ini, select the new avatar, and clear the name input
+	write_settings_ini(avatar_dir.array, settings);
+
+	// Add the new avatar to the dropdown list immediately
+	obs_property_t *list = obs_properties_get(props, "avatar_list");
+	if (list)
+		obs_property_list_add_string(list, new_name, new_name);
+
+	obs_data_set_string(settings, "avatar_list", new_name);
+	obs_data_set_string(settings, "new_avatar_name", "");
+	apply_avatar_to_settings(settings, new_name, false);
+	obs_source_update(tuber->source, settings);
+
+	dstr_free(&avatar_dir);
+	bfree(new_name);
+	obs_data_release(settings);
+
+	BLOG(LOG_INFO, "save_as_new: complete");
+	return true;
+}
+
+// Opens the custom avatars folder in Windows Explorer
 static bool open_library_folder(obs_properties_t *props, obs_property_t *p, void *data)
 {
-	(void)props; (void)p; (void)data;
-	char path[512];
-	char *module_data_path = obs_module_get_config_path(obs_current_module(), "");
-	if (module_data_path) {
+	(void)props; (void)p;
+	struct flood_tuber_data *tuber = (struct flood_tuber_data *)data;
+	if (!tuber || !tuber->source) return false;
+
+	obs_data_t *settings = obs_source_get_settings(tuber->source);
+	if (!settings) return false;
+
+	const char *custom = get_custom_dir(settings);
+	if (custom) {
+		BLOG(LOG_INFO, "open_folder: opening %s", custom);
+#ifdef _WIN32
+		ShellExecuteA(NULL, "open", custom, NULL, NULL, SW_SHOWDEFAULT);
+#endif
+	} else {
+		// No custom folder set — open built-in avatars dir
 		char *data_dir = obs_module_file("avatars");
 		if (data_dir) {
-			os_get_abs_path(data_dir, path, 512);
-			bfree(data_dir);
+			BLOG(LOG_INFO, "open_folder: no custom dir, opening built-in: %s", data_dir);
 #ifdef _WIN32
-			ShellExecuteA(NULL, "open", path, NULL, NULL, SW_SHOWDEFAULT);
+			ShellExecuteA(NULL, "open", data_dir, NULL, NULL, SW_SHOWDEFAULT);
 #endif
+			bfree(data_dir);
 		}
-		bfree(module_data_path);
 	}
+	obs_data_release(settings);
 	return false;
 }
 
@@ -260,6 +545,79 @@ static bool on_motion_type_changed(obs_properties_t *props, obs_property_t *p,
 }
 
 
+// Helper: adds custom dir avatar entries to a list property, avoiding duplicates
+static void populate_custom_avatars(obs_property_t *list, const char *custom_path)
+{
+	if (!custom_path || !*custom_path || !os_file_exists(custom_path)) return;
+	os_dir_t *cdir = os_opendir(custom_path);
+	if (!cdir) return;
+	struct os_dirent *ent;
+	while ((ent = os_readdir(cdir)) != NULL) {
+		if (ent->directory && ent->d_name[0] != '.') {
+			size_t count = obs_property_list_item_count(list);
+			bool found = false;
+			for (size_t i = 0; i < count; i++) {
+				const char *v = obs_property_list_item_string(list, i);
+				if (v && strcmp(v, ent->d_name) == 0) { found = true; break; }
+			}
+			if (!found)
+				obs_property_list_add_string(list, ent->d_name, ent->d_name);
+		}
+	}
+	os_closedir(cdir);
+}
+
+// Called when the custom avatars folder path changes — rebuilds the dropdown
+static bool on_custom_path_changed(obs_properties_t *props, obs_property_t *p,
+                                   obs_data_t *settings)
+{
+	(void)p;
+	obs_property_t *list = obs_properties_get(props, "avatar_list");
+	if (!list) return false;
+
+	// Clear the entire list and re-add built-in avatars
+	obs_property_list_clear(list);
+
+	char *data_dir = obs_module_file("avatars");
+	if (data_dir) {
+		os_dir_t *dir = os_opendir(data_dir);
+		if (dir) {
+			struct os_dirent *ent;
+			while ((ent = os_readdir(dir)) != NULL)
+				if (ent->directory && ent->d_name[0] != '.')
+					obs_property_list_add_string(list, ent->d_name, ent->d_name);
+			os_closedir(dir);
+		}
+		bfree(data_dir);
+	}
+
+	// Add custom avatars from the new path
+	const char *custom = obs_data_get_string(settings, "custom_avatars_path");
+	populate_custom_avatars(list, custom);
+
+	return true;
+}
+
+// Clears the custom folder path
+static bool clear_custom_folder(obs_properties_t *props, obs_property_t *p, void *data)
+{
+	(void)p;
+	struct flood_tuber_data *tuber = (struct flood_tuber_data *)data;
+	if (!tuber || !tuber->source) return false;
+
+	obs_data_t *settings = obs_source_get_settings(tuber->source);
+	if (!settings) return false;
+
+	obs_data_set_string(settings, "custom_avatars_path", "");
+	obs_source_update(tuber->source, settings);
+
+	// Rebuild the dropdown without custom entries
+	on_custom_path_changed(props, NULL, settings);
+
+	obs_data_release(settings);
+	return true;
+}
+
 // Build the OBS properties panel
 obs_properties_t *flood_tuber_properties(void *data)
 {
@@ -274,6 +632,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 	obs_property_t *list = obs_properties_add_list(lib, "avatar_list",
 		obs_module_text("avatar_list"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
 
+	// Enumerate built-in avatars from data dir
 	char *avatars_dir = obs_module_file("avatars");
 	if (avatars_dir) {
 		os_dir_t *dir = os_opendir(avatars_dir);
@@ -286,8 +645,35 @@ obs_properties_t *flood_tuber_properties(void *data)
 		}
 		bfree(avatars_dir);
 	}
+
+	// Enumerate custom avatars from user-specified folder
+	if (tuber && tuber->source) {
+		obs_data_t *cur_settings = obs_source_get_settings(tuber->source);
+		if (cur_settings) {
+			const char *custom = get_custom_dir(cur_settings);
+			populate_custom_avatars(list, custom);
+			obs_data_release(cur_settings);
+		}
+	}
+
 	obs_properties_add_button(lib, "load_avatar_btn",
 		obs_module_text("load_avatar_btn"), load_avatar);
+	obs_properties_add_button(lib, "save_settings_btn",
+		obs_module_text("save_settings_btn"), save_settings_to_avatar);
+
+	// Custom avatars folder picker with live-refresh callback
+	obs_properties_add_text(lib, "hint_custom_folder", NULL, OBS_TEXT_INFO);
+	obs_property_t *folder_prop = obs_properties_add_path(lib, "custom_avatars_path",
+		obs_module_text("custom_avatars_path"), OBS_PATH_DIRECTORY, NULL, NULL);
+	obs_property_set_modified_callback(folder_prop, on_custom_path_changed);
+	obs_properties_add_button(lib, "clear_custom_folder_btn",
+		obs_module_text("clear_custom_folder"), clear_custom_folder);
+
+	// Save As New Avatar
+	obs_properties_add_text(lib, "new_avatar_name",
+		obs_module_text("new_avatar_name"), OBS_TEXT_DEFAULT);
+	obs_properties_add_button(lib, "save_as_new_btn",
+		obs_module_text("save_as_new_btn"), save_as_new_avatar);
 	obs_properties_add_button(lib, "open_folder_btn",
 		obs_module_text("open_folder_btn"), open_library_folder);
 
