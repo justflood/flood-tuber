@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.22...3.25)
-project(flood-tuber VERSION 1.0.2)
+project(flood-tuber VERSION 1.1.0)
 
 # 1. Plugin Definition
 add_library(flood-tuber MODULE)
 set_target_properties_obs(flood-tuber PROPERTIES FOLDER plugins PREFIX "")
+
+# Version passed to C++ code via compile define (single source of truth)
+target_compile_definitions(flood-tuber PRIVATE
+    FLOOD_TUBER_VERSION="${PROJECT_VERSION}"
+)
 
 # 2. Dependencies (libwebp)
 include(FetchContent)

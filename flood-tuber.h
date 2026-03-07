@@ -8,7 +8,10 @@
 #include "webp-decoder.h"
 #include "apng-decoder.h"
 
-#define FLOOD_TUBER_VERSION "1.0.2"
+// FLOOD_TUBER_VERSION is defined by CMake via target_compile_definitions
+#ifndef FLOOD_TUBER_VERSION
+#define FLOOD_TUBER_VERSION "0.0.0"
+#endif
 #define BLOG(level, format, ...) blog(level, "[Flood-Tuber] " format, ##__VA_ARGS__)
 
 // Represents the current animation state of the avatar

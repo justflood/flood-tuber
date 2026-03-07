@@ -185,8 +185,11 @@ void flood_tuber_defaults(obs_data_t *settings)
 	obs_data_set_default_string(settings, "hint_action", obs_module_text("hint_action"));
 	obs_data_set_default_string(settings, "hint_motion", obs_module_text("hint_motion"));
 
-	// About info boxes
-	obs_data_set_default_string(settings, "about_version", obs_module_text("about_version"));
+	// About info boxes — version built at runtime from CMake define
+	struct dstr ver_str = {0};
+	dstr_catf(&ver_str, "%s  v%s", obs_module_text("about_version"), FLOOD_TUBER_VERSION);
+	obs_data_set_default_string(settings, "about_version", ver_str.array);
+	dstr_free(&ver_str);
 	obs_data_set_default_string(settings, "about_author",  obs_module_text("about_author"));
 }
 
