@@ -81,13 +81,12 @@ function(_setup_obs_studio)
       set(_osx_sysroot "${CMAKE_OSX_SYSROOT}")
     endif()
 
-    set(_cmake_extra "-DCMAKE_OSX_DEPLOYMENT_TARGET=${_deployment_target} -DCMAKE_OSX_SYSROOT=${_osx_sysroot}")
-
-    # Patch inner OBS source to avoid regex crash if SYSROOT is empty
+    # Patch inner OBS source to avoid regex crash and fragile version checks
     set(_inner_compiler_config "${dependencies_dir}/${_obs_destination}/cmake/macos/compilerconfig.cmake")
     if(EXISTS "${_inner_compiler_config}")
       file(READ "${_inner_compiler_config}" _content)
       string(REPLACE " \${CMAKE_OSX_SYSROOT})" " \"\${CMAKE_OSX_SYSROOT}\")" _content "${_content}")
+      string(REPLACE "VERSION_LESS" "VERSION_GREATER" _content "${_content}")
       file(WRITE "${_inner_compiler_config}" "${_content}")
     endif()
   endif()
