@@ -50,7 +50,7 @@ jobs:
             libxss-dev libxinerama-dev libasound2-dev \
             libpulse-dev libudev-dev libmbedtls-dev \
             uuid-dev libv4l-dev libjansson-dev libluajit-5.1-dev \
-            python3-dev swig libuthash-dev
+            python3-dev swig uthash-dev
 
       - name: Prepare Source Tree
         shell: bash
@@ -65,16 +65,16 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/obsproject/obs-deps/releases/download/2024-01-26/obs-deps-2024-01-26-windows-x64.zip" -OutFile obs-deps.zip
+          Invoke-WebRequest -Uri "https://github.com/obsproject/obs-deps/releases/download/2024-05-08/windows-deps-2024-05-08-x64.zip" -OutFile obs-deps.zip
           Expand-Archive obs-deps.zip -DestinationPath obs-deps
 
       - name: Download OBS Dependencies (macOS)
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          curl -LO "https://github.com/obsproject/obs-deps/releases/download/2024-01-26/obs-deps-2024-01-26-macos-universal.tar.xz"
+          curl -LO "https://github.com/obsproject/obs-deps/releases/download/2024-05-08/macos-deps-2024-05-08-universal.tar.xz"
           mkdir obs-deps
-          tar -xf obs-deps-2024-01-26-macos-universal.tar.xz -C obs-deps
+          tar -xf macos-deps-2024-05-08-universal.tar.xz -C obs-deps
 
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
