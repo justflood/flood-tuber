@@ -1,0 +1,48 @@
+{
+    "dependencies": {
+        "obs-studio": {
+            "version": "30.2.3",
+            "baseUrl": "https://github.com/obsproject/obs-studio/archive/refs/tags",
+            "label": "OBS sources",
+            "hashes": {
+                "macos": "",
+                "windows-x64": "",
+                "ubuntu-x86_64": ""
+            }
+        },
+        "prebuilt": {
+            "version": "2024-05-08",
+            "baseUrl": "https://github.com/obsproject/obs-deps/releases/download",
+            "label": "Pre-Built obs-deps",
+            "hashes": {
+                "macos": "",
+                "windows-x64": "",
+                "ubuntu-x86_64": ""
+            }
+        },
+        "qt6": {
+            "version": "2024-05-08",
+            "baseUrl": "https://github.com/obsproject/obs-deps/releases/download",
+            "label": "Pre-Built Qt6",
+            "hashes": {
+                "macos": "",
+                "windows-x64": "",
+                "ubuntu-x86_64": ""
+            },
+            "debugSymbols": {
+                "windows-x64": ""
+            }
+        }
+    },
+    "platformConfig": {
+        "macos": {
+            "bundleId": "com.justflood.flood-tuber"
+        }
+    },
+    "name": "flood-tuber",
+    "displayName": "Flood Tuber",
+    "version": "1.1.0",
+    "author": "justflood",
+    "website": "https://github.com/justflood/flood-tuber",
+    "email": "me@example.com"
+}

@@ -30,5 +30,7 @@ Thumbs.db
 
 # Test files
 ovr-test/
+.deps/
+build_*/
 
 docs/
