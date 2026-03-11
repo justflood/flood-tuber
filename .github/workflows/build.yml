@@ -1,0 +1,146 @@
+name: Build Flood Tuber
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - build-test
+  pull_request:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+          - os: macos-14
+          - os: ubuntu-24.04
+
+    steps:
+      - name: Checkout Plugin
+        uses: actions/checkout@v4
+        with:
+          path: flood-tuber
+
+      - name: Checkout OBS Studio
+        uses: actions/checkout@v4
+        with:
+          repository: obsproject/obs-studio
+          ref: 30.2.3
+          submodules: recursive
+          path: obs-studio
+
+      - name: Setup Linux Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config build-essential \
+            libgl1-mesa-dev libxcb-shm0-dev libxcb-xfixes0-dev \
+            libx11-xcb-dev libwayland-dev libxkbcommon-dev \
+            libvlc-dev libcurl4-openssl-dev libavcodec-dev \
+            libavdevice-dev libavfilter-dev libavformat-dev \
+            libavutil-dev libswscale-dev libswresample-dev \
+            libfontconfig1-dev libfreetype6-dev libx11-dev \
+            libxcomposite-dev libxfixes-dev libxrandr-dev \
+            libxss-dev libxinerama-dev libasound2-dev \
+            libpulse-dev libudev-dev libmbedtls-dev \
+            uuid-dev libv4l-dev
+
+      - name: Prepare Source Tree
+        shell: bash
+        run: |
+          # Move plugin into OBS tree
+          mv flood-tuber obs-studio/plugins/
+          
+          # Add plugin to obs-studio/plugins/CMakeLists.txt
+          echo "add_subdirectory(flood-tuber)" >> obs-studio/plugins/CMakeLists.txt
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        working-directory: obs-studio
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DENABLE_UI=OFF \
+            -DENABLE_WEBSOCKET=OFF \
+            -DENABLE_DECKLINK=OFF \
+            -DENABLE_AJA=OFF \
+            -DENABLE_SCRIPTING=OFF \
+            -DENABLE_VST=OFF \
+            -DENABLE_WAYLAND=OFF \
+            -DENABLE_BROWSER=OFF \
+            -DENABLE_VLC=OFF
+
+      - name: Configure CMake (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: obs-studio
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DENABLE_UI=OFF \
+            -DENABLE_BROWSER=OFF \
+            -DENABLE_SCRIPTING=OFF \
+            -DENABLE_VLC=OFF \
+            -DENABLE_WEBSOCKET=OFF
+
+      - name: Configure CMake (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: obs-studio
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DENABLE_UI=OFF \
+            -DENABLE_BROWSER=OFF \
+            -DENABLE_SCRIPTING=OFF \
+            -DENABLE_WAYLAND=OFF \
+            -DENABLE_AJA=OFF \
+            -DENABLE_DECKLINK=OFF \
+            -DENABLE_WEBSOCKET=OFF \
+            -DBUILD_FOR_MPEGTS=OFF
+
+      - name: Build Plugin
+        shell: bash
+        working-directory: obs-studio
+        run: cmake --build build --config RelWithDebInfo --target flood-tuber --parallel
+
+      - name: Package Plugin (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p artifacts/windows/obs-plugins/64bit
+          cp obs-studio/build/plugins/flood-tuber/RelWithDebInfo/flood-tuber.dll artifacts/windows/obs-plugins/64bit/
+          mkdir -p artifacts/windows/data/obs-plugins/flood-tuber
+          cp -R obs-studio/plugins/flood-tuber/data/* artifacts/windows/data/obs-plugins/flood-tuber/
+
+      - name: Package Plugin (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p artifacts/macos/obs-plugins
+          cp -R obs-studio/build/plugins/flood-tuber/flood-tuber.plugin artifacts/macos/obs-plugins/ || true
+          mkdir -p artifacts/macos/data/obs-plugins/flood-tuber
+          cp -R obs-studio/plugins/flood-tuber/data/* artifacts/macos/data/obs-plugins/flood-tuber/
+
+      - name: Package Plugin (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p artifacts/linux/obs-plugins/64bit
+          cp obs-studio/build/plugins/flood-tuber/flood-tuber.so artifacts/linux/obs-plugins/64bit/ || true
+          mkdir -p artifacts/linux/data/obs-plugins/flood-tuber
+          cp -R obs-studio/plugins/flood-tuber/data/* artifacts/linux/data/obs-plugins/flood-tuber/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flood-tuber-${{ matrix.os }}
+          path: artifacts/

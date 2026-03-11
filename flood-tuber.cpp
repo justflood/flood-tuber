@@ -3,6 +3,13 @@
 #include <util/dstr.h>
 #include <math.h>
 
+#ifdef _WIN32
+#define STRCMPI _strcmpi
+#else
+#include <strings.h>
+#define STRCMPI strcasecmp
+#endif
+
 
 // Validate file headers to prevent crashes (e.g. renamed .txt files)
 static bool check_file_signature(const char *path) {
@@ -43,7 +50,7 @@ static bool check_file_signature(const char *path) {
     // Allow others if we are brave, but for GIF specifically we MUST validate 
     // because OBS crashes on corrupt GIFs.
     const char *ext = strrchr(path, '.');
-    if (ext && _strcmpi(ext, ".gif") == 0) {
+    if (ext && STRCMPI(ext, ".gif") == 0) {
         return false; // Extension says GIF but header doesn't match
     }
 
@@ -61,7 +68,7 @@ static void update_image(FloodImage *image, const char *path)
             blog(LOG_WARNING, "Invalid file signature (corrupt or fake file?): %s", path);
         } else {
             const char *ext = strrchr(path, '.');
-            bool is_webp = (ext && (_strcmpi(ext, ".webp") == 0));
+            bool is_webp = (ext && (STRCMPI(ext, ".webp") == 0));
             
             if (is_webp) {
                 image->type = FloodImage::CUSTOM_WEBP;
@@ -72,7 +79,7 @@ static void update_image(FloodImage *image, const char *path)
                 } else {
                      blog(LOG_INFO, "Loaded WebP: %s", path);
                 }
-            } else if (ext && (_strcmpi(ext, ".apng") == 0 || _strcmpi(ext, ".png") == 0)) {
+            } else if (ext && (STRCMPI(ext, ".apng") == 0 || STRCMPI(ext, ".png") == 0)) {
                 // Check if it's an animated PNG
                 APNGDecoder *temp_decoder = new APNGDecoder();
                 if (temp_decoder->Load(path) && temp_decoder->IsAnimated()) {
