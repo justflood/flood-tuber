@@ -93,7 +93,8 @@ jobs:
             -DENABLE_VST=OFF \
             -DENABLE_WAYLAND=OFF \
             -DENABLE_BROWSER=OFF \
-            -DENABLE_VLC=OFF
+            -DENABLE_VLC=OFF \
+            -DENABLE_WEBRTC=OFF
 
       - name: Configure CMake (macOS)
         if: runner.os == 'macOS'
@@ -101,13 +102,15 @@ jobs:
         working-directory: obs-studio
         run: |
           cmake -S . -B build -G Xcode \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
             -DCMAKE_PREFIX_PATH="${{ github.workspace }}/obs-deps;${{ github.workspace }}/obs-deps/bin" \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DENABLE_UI=OFF \
             -DENABLE_BROWSER=OFF \
             -DENABLE_SCRIPTING=OFF \
             -DENABLE_VLC=OFF \
-            -DENABLE_WEBSOCKET=OFF
+            -DENABLE_WEBSOCKET=OFF \
+            -DENABLE_WEBRTC=OFF
 
       - name: Configure CMake (Linux)
         if: runner.os == 'Linux'
@@ -124,6 +127,8 @@ jobs:
             -DENABLE_AJA=OFF \
             -DENABLE_DECKLINK=OFF \
             -DENABLE_WEBSOCKET=OFF \
+            -DENABLE_WEBRTC=OFF \
+            -DENABLE_PIPEWIRE=OFF \
             -DBUILD_FOR_MPEGTS=OFF
 
       - name: Build Plugin
