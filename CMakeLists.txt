@@ -41,6 +41,10 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 # Dependencies (libwebp)
+if(POLICY CMP0169)
+    cmake_policy(SET CMP0169 OLD) # Allow FetchContent_Populate without warning
+endif()
+
 include(FetchContent)
 FetchContent_Declare(
     libwebp
@@ -60,7 +64,7 @@ set(WEBP_BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
 FetchContent_GetProperties(libwebp)
 if(NOT libwebp_POPULATED)
     FetchContent_Populate(libwebp)
-    add_subdirectory(${libwebp_source_dir} ${libwebp_binary_dir} EXCLUDE_FROM_ALL)
+    add_subdirectory(${libwebp_SOURCE_DIR} ${libwebp_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
