@@ -42,6 +42,24 @@ if (( ! (${skips[(Ie)all]} + ${skips[(Ie)deps]}) )) {
     build-essential \
     libgles2-mesa-dev \
     libsimde-dev \
+    libpipewire-0.3-dev \
+    libasound2-dev \
+    libpulse-dev \
+    libdbus-1-dev \
+    libx11-dev \
+    libx11-xcb-dev \
+    libxcb-xfixes0-dev \
+    libxcb-shm0-dev \
+    libxcb-randr0-dev \
+    libxcb-xinerama0-dev \
+    libxcb-composite0-dev \
+    libxcomposite-dev \
+    libv4l-dev \
+    libva-dev \
+    libdrm-dev \
+    libpci-dev \
+    libgl1-mesa-dev \
+    uthash-dev \
     obs-studio
 
   local -a _qt_packages=()
