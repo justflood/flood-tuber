@@ -50,7 +50,8 @@ jobs:
             libxss-dev libxinerama-dev libasound2-dev \
             libpulse-dev libudev-dev libmbedtls-dev \
             uuid-dev libv4l-dev libjansson-dev libluajit-5.1-dev \
-            python3-dev swig uthash-dev
+            python3-dev swig uthash-dev libxcb-composite0-dev \
+            libxcb-randr0-dev libxcb-xinerama0-dev
 
       - name: Prepare Source Tree
         shell: bash
@@ -99,7 +100,7 @@ jobs:
         shell: bash
         working-directory: obs-studio
         run: |
-          cmake -S . -B build \
+          cmake -S . -B build -G Xcode \
             -DCMAKE_PREFIX_PATH="${{ github.workspace }}/obs-deps;${{ github.workspace }}/obs-deps/bin" \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DENABLE_UI=OFF \

@@ -3,7 +3,15 @@ project(flood-tuber VERSION 1.1.0)
 
 # 1. Plugin Definition
 add_library(flood-tuber MODULE)
-set_target_properties_obs(flood-tuber PROPERTIES FOLDER plugins PREFIX "")
+
+# Attempt to include OBS helpers if building within the OBS tree
+include(ObsPluginHelpers OPTIONAL)
+
+if(COMMAND set_target_properties_obs)
+    set_target_properties_obs(flood-tuber PROPERTIES FOLDER plugins PREFIX "")
+else()
+    set_target_properties(flood-tuber PROPERTIES FOLDER plugins PREFIX "")
+endif()
 
 # Version passed to C++ code via compile define (single source of truth)
 target_compile_definitions(flood-tuber PRIVATE
