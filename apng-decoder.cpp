@@ -94,7 +94,6 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
     std::vector<APNGFrameInfo> frame_infos;
     APNGFrameInfo current_info;
     bool is_apng = false;
-    uint32_t first_frame_seq = 0;
 
     std::vector<unsigned char> common_chunks;
 
@@ -322,6 +321,9 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
 }
 
 void APNGDecoder::DecodeFrame(const APNGFrameInfo& info, std::vector<unsigned char>& canvas, std::vector<unsigned char>& prev_canvas) {
+    UNUSED_PARAMETER(info);
+    UNUSED_PARAMETER(canvas);
+    UNUSED_PARAMETER(prev_canvas);
     // Unused helper, logic moved inline
 }
 

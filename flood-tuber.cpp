@@ -2,6 +2,15 @@
 #include "flood-tuber-props.h"
 #include <util/dstr.h>
 #include <math.h>
+#include <util/platform.h>
+
+#ifdef _WIN32
+#define STRCMPI _strcmpi
+#else
+#include <strings.h>
+#define STRCMPI strcasecmp
+#endif
+
 
 
 // Validate file headers to prevent crashes (e.g. renamed .txt files)
@@ -43,7 +52,7 @@ static bool check_file_signature(const char *path) {
     // Allow others if we are brave, but for GIF specifically we MUST validate 
     // because OBS crashes on corrupt GIFs.
     const char *ext = strrchr(path, '.');
-    if (ext && _strcmpi(ext, ".gif") == 0) {
+    if (ext && STRCMPI(ext, ".gif") == 0) {
         return false; // Extension says GIF but header doesn't match
     }
 
@@ -61,7 +70,7 @@ static void update_image(FloodImage *image, const char *path)
             blog(LOG_WARNING, "Invalid file signature (corrupt or fake file?): %s", path);
         } else {
             const char *ext = strrchr(path, '.');
-            bool is_webp = (ext && (_strcmpi(ext, ".webp") == 0));
+            bool is_webp = (ext && (STRCMPI(ext, ".webp") == 0));
             
             if (is_webp) {
                 image->type = FloodImage::CUSTOM_WEBP;
@@ -72,7 +81,7 @@ static void update_image(FloodImage *image, const char *path)
                 } else {
                      blog(LOG_INFO, "Loaded WebP: %s", path);
                 }
-            } else if (ext && (_strcmpi(ext, ".apng") == 0 || _strcmpi(ext, ".png") == 0)) {
+            } else if (ext && (STRCMPI(ext, ".apng") == 0 || STRCMPI(ext, ".png") == 0)) {
                 // Check if it's an animated PNG
                 APNGDecoder *temp_decoder = new APNGDecoder();
                 if (temp_decoder->Load(path) && temp_decoder->IsAnimated()) {
@@ -159,6 +168,7 @@ static uint32_t flood_image_get_height(FloodImage *img) {
 static void audio_callback(void *data_ptr, obs_source_t *source, const struct audio_data *audio_data, bool muted)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
+	UNUSED_PARAMETER(source);
 	if (muted) {
 		data->current_db = -100.0f;
 		return;
@@ -389,6 +399,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
+	UNUSED_PARAMETER(effect);
 	gs_texture_t *tex = flood_image_get_texture(&data->image_idle);
 
 	if (data->current_state == AvatarState::ACTION && flood_image_get_texture(&data->image_action)) {
@@ -470,6 +481,7 @@ static uint32_t flood_tuber_get_height(void *data_ptr)
 }
 static const char *flood_tuber_get_name(void *unused)
 {
+	UNUSED_PARAMETER(unused);
 	return "Flood Tuber Avatar";
 }
 
