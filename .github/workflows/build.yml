@@ -49,7 +49,8 @@ jobs:
             libxcomposite-dev libxfixes-dev libxrandr-dev \
             libxss-dev libxinerama-dev libasound2-dev \
             libpulse-dev libudev-dev libmbedtls-dev \
-            uuid-dev libv4l-dev
+            uuid-dev libv4l-dev libjansson-dev libluajit-5.1-dev \
+            python3-dev swig
 
       - name: Prepare Source Tree
         shell: bash
@@ -60,12 +61,28 @@ jobs:
           # Add plugin to obs-studio/plugins/CMakeLists.txt
           echo "add_subdirectory(flood-tuber)" >> obs-studio/plugins/CMakeLists.txt
 
+      - name: Download OBS Dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/obsproject/obs-deps/releases/download/2024-03-26/obs-deps-2024-03-26-windows-x64.zip" -OutFile obs-deps.zip
+          Expand-Archive obs-deps.zip -DestinationPath obs-deps
+
+      - name: Download OBS Dependencies (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          curl -LO "https://github.com/obsproject/obs-deps/releases/download/2024-03-26/obs-deps-2024-03-26-macos-universal.tar.xz"
+          mkdir obs-deps
+          tar -xf obs-deps-2024-03-26-macos-universal.tar.xz -C obs-deps
+
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
         shell: bash
         working-directory: obs-studio
         run: |
           cmake -S . -B build -G "Visual Studio 17 2022" -A x64 \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/obs-deps;${{ github.workspace }}/obs-deps/bin" \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DENABLE_UI=OFF \
             -DENABLE_WEBSOCKET=OFF \
@@ -83,6 +100,7 @@ jobs:
         working-directory: obs-studio
         run: |
           cmake -S . -B build \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/obs-deps;${{ github.workspace }}/obs-deps/bin" \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DENABLE_UI=OFF \
             -DENABLE_BROWSER=OFF \
