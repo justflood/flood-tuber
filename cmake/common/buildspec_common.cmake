@@ -66,7 +66,22 @@ function(_setup_obs_studio)
     if(NOT _deployment_target MATCHES "\\.")
       set(_deployment_target "${_deployment_target}.0")
     endif()
-    set(_cmake_extra "-DCMAKE_OSX_DEPLOYMENT_TARGET=${_deployment_target}")
+
+    if("${CMAKE_OSX_SYSROOT}" STREQUAL "")
+      execute_process(
+        COMMAND xcrun --sdk macosx --show-sdk-path
+        OUTPUT_VARIABLE _sdk_path
+        RESULT_VARIABLE _result
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+      )
+      if(_result EQUAL 0)
+        set(_osx_sysroot "${_sdk_path}")
+      endif()
+    else()
+      set(_osx_sysroot "${CMAKE_OSX_SYSROOT}")
+    endif()
+
+    set(_cmake_extra "-DCMAKE_OSX_DEPLOYMENT_TARGET=${_deployment_target} -DCMAKE_OSX_SYSROOT=${_osx_sysroot}")
   endif()
 
   message(STATUS "Configure ${label} (${arch})")
