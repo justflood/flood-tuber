@@ -56,7 +56,12 @@ set(WEBP_BUILD_VWEBP OFF CACHE BOOL "" FORCE)
 set(WEBP_BUILD_WEBPINFO OFF CACHE BOOL "" FORCE)
 set(WEBP_BUILD_WEBPMUX OFF CACHE BOOL "" FORCE)
 set(WEBP_BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(libwebp)
+
+FetchContent_GetProperties(libwebp)
+if(NOT libwebp_POPULATED)
+    FetchContent_Populate(libwebp)
+    add_subdirectory(${libwebp_source_dir} ${libwebp_binary_dir} EXCLUDE_FROM_ALL)
+endif()
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     flood-tuber.cpp
