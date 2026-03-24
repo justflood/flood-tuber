@@ -37,6 +37,22 @@ static gs_texture_t* flood_image_get_texture(FloodImage *img) {
     return img->obs_image.texture;
 }
 
+static uint32_t flood_image_get_width(FloodImage *img) {
+    if (img->type == FloodImage::CUSTOM_WEBP && img->webp_decoder)
+        return img->webp_decoder->GetWidth();
+    if (img->type == FloodImage::CUSTOM_APNG && img->apng_decoder)
+        return img->apng_decoder->GetWidth();
+    return img->obs_image.cx;
+}
+
+static uint32_t flood_image_get_height(FloodImage *img) {
+    if (img->type == FloodImage::CUSTOM_WEBP && img->webp_decoder)
+        return img->webp_decoder->GetHeight();
+    if (img->type == FloodImage::CUSTOM_APNG && img->apng_decoder)
+        return img->apng_decoder->GetHeight();
+    return img->obs_image.cy;
+}
+
 // Callback: Processes audio data to feed OVR
 static void lipsync_audio_callback(void *data_ptr, obs_source_t *source, const struct audio_data *audio_data, bool muted)
 {
@@ -353,12 +369,14 @@ static void lipsync_render(void *data_ptr, gs_effect_t *effect)
 static uint32_t lipsync_get_width(void *data_ptr)
 {
 	struct flood_tuber_lipsync_data *data = (struct flood_tuber_lipsync_data *)data_ptr;
-    return 500;
+    uint32_t w = flood_image_get_width(&data->image_closed);
+    return w ? w : 500;
 }
 static uint32_t lipsync_get_height(void *data_ptr)
 {
 	struct flood_tuber_lipsync_data *data = (struct flood_tuber_lipsync_data *)data_ptr;
-    return 500;
+    uint32_t h = flood_image_get_height(&data->image_closed);
+    return h ? h : 500;
 }
 
 static const char *lipsync_get_name(void *unused)
