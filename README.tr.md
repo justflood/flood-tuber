@@ -2,7 +2,7 @@
 
 # Flood Tuber - OBS Eklentisi
 
-[![Discord](https://img.shields.io/badge/Discord-Join_the_Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/wm5qPpYe9A)
+[![Patreon](https://img.shields.io/badge/Patreon-Support_Me-F96854?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/justflood) [![Discord](https://img.shields.io/badge/Discord-Join_the_Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/wm5qPpYe9A)
 
 **Flood Tuber**, yayınlarınıza hayat katan, hafif ve güçlü bir tepkisel PNGTuber avatar eklentisidir. Mikrofonunuzun ses seviyesini algılayarak avatarınızı konuşma, göz kırpma ve rastgele aksiyon durumlarıyla canlandırır, yayınlarınıza karmaşık kurulumlar olmadan dinamizm katar.
 
