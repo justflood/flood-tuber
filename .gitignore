@@ -32,3 +32,6 @@ Thumbs.db
 ovr-test/
 
 docs/
+
+.deps/
+build_x64/
