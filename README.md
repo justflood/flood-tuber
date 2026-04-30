@@ -63,9 +63,12 @@ I offer two installation methods:
 
 ## Creating Your Own Avatar
 
-1.  Click **"Open Library Folder"** in the properties.
+> **⚠️ IMPORTANT: STRICT FILE NAMING**
+> The plugin does NOT save custom file names to the settings. It strictly looks for exact filenames in the folder. **You MUST name your image files exactly as shown below**, otherwise the "Load & Apply" button will not work, and the plugin will "forget" your files when switching avatars.
+
+1.  Click **"Open Avatars Folder"** in the properties.
 2.  Create a new folder with your avatar's name (e.g., `My Cool Avatar`).
-3.  Place your images inside:
+3.  Place your images inside and rename them exactly like this:
     *   `idle.png`
     *   `talk_a.png`, `talk_b.png`, `talk_c.png`
     *   `blink.png`

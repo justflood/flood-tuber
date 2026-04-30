@@ -63,9 +63,12 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
 
 ## Kendi Avatarınızı Oluşturma
 
-1.  Özelliklerdeki **"Open Library Folder"** (Kütüphane Klasörünü Aç) butonuna tıklayın.
+> **⚠️ ÖNEMLİ: KESİN DOSYA İSİMLENDİRMESİ**
+> Eklenti, sizin verdiğiniz özel dosya isimlerini ayarlara kaydetmez. Klasör içinde tam olarak aradığı sabit isimleri bulmak zorundadır. **Resim dosyalarınızı kesinlikle aşağıda gösterildiği gibi isimlendirmelisiniz**, aksi takdirde "Load & Apply" butonu çalışmaz ve eklenti başka bir avatara geçip döndüğünüzde dosyalarınızı "unutur".
+
+1.  Özelliklerdeki **"Open Avatars Folder"** (Avatar Klasörünü Aç) butonuna tıklayın.
 2.  Avatarınızın ismiyle yeni bir klasör oluşturun (örn: `Benim Havali Avatarim`).
-3.  Görsellerinizi içine atın:
+3.  Görsellerinizi içine atın ve isimlerini tam olarak şu şekilde değiştirin:
     *   `idle.png`
     *   `talk_a.png`, `talk_b.png`, `talk_c.png`
     *   `blink.png`
