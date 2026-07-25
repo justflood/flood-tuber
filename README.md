@@ -30,9 +30,9 @@ You can download the latest version of Flood Tuber from:
 *   **[Official OBS Resources Page](https://obsproject.com/forum/resources/flood-tuber-native-pngtuber-plugin.2336/)** 
 *   **[GitHub Releases](https://github.com/justflood/flood-tuber/releases/latest)** (Recommended)
 
-I offer two installation methods:
+### Windows
 
-### Option 1: Installer (Recommended)
+#### Option 1: Installer (Recommended)
 1.  Download the `FloodTuber-Installer.exe`.
 2.  Run the installer.
     > **⚠️ Note regarding "Windows protected your PC":**
@@ -42,12 +42,71 @@ I offer two installation methods:
     > *   Click **"Run Anyway"**
 3.  Follow the setup wizard instructions.
 
-### Option 2: Portable (Manual)
+#### Option 2: Portable (Manual)
 1.  Download the `FloodTuber-Portable.zip`.
 2.  Extract the contents.
 3.  Copy the `flood-tuber.dll` into your OBS plugins folder (usually `C:\Program Files\obs-studio\obs-plugins\64bit`).
 4.  Copy the `flood-tuber` folder from the `data/obs-plugins` folder to the OBS data directory (usually `C:\Program Files\obs-studio\data\obs-plugins\flood-tuber`).
-5.  Restart OBS Studio.
+ 5.  Restart OBS Studio.
+
+### macOS
+
+#### Building from source
+
+**Prerequisites:** OBS Studio (Homebrew), CMake, Git, and Xcode Command Line Tools.
+
+```bash
+# Install dependencies
+brew install cmake obs-studio
+```
+
+**Build and install:**
+
+```bash
+git clone https://github.com/justflood/flood-tuber.git
+cd flood-tuber
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+sudo cmake --install build --prefix /usr/local
+```
+
+#### Manual installation (portable)
+
+1. Build as shown above.
+2. Copy `build/flood-tuber.so` to `~/Library/Application Support/obs-studio/plugins/flood-tuber/bin/`
+3. Copy the `data/` directory contents to `~/Library/Application Support/obs-studio/plugins/flood-tuber/data/`
+4. Restart OBS Studio.
+
+### Linux
+
+#### Building from source
+
+**Prerequisites:** OBS Studio development headers, CMake, Git, and a C++ compiler.
+
+```bash
+# Ubuntu/Debian
+sudo apt install build-essential cmake git libobs-dev
+
+# Fedora
+sudo dnf install cmake git obs-studio-devel
+```
+
+**Build and install:**
+
+```bash
+git clone https://github.com/justflood/flood-tuber.git
+cd flood-tuber
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+sudo cmake --install build --prefix /usr
+```
+
+#### Manual installation (portable)
+
+1. Build as shown above.
+2. Copy `build/flood-tuber.so` to `~/.config/obs-studio/plugins/flood-tuber/bin/64bit/`
+3. Copy the `data/` directory contents to `~/.config/obs-studio/plugins/flood-tuber/data/`
+4. Restart OBS Studio.
 
 ## Usage
 

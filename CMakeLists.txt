@@ -1,9 +1,39 @@
 cmake_minimum_required(VERSION 3.22...3.25)
 project(flood-tuber VERSION 1.1.0)
 
+find_package(libobs CONFIG REQUIRED)
+
+# Platform-agnostic install destinations (fallback if OBS cmake helpers unavailable)
+if(NOT DEFINED OBS_PLUGIN_DESTINATION)
+    if(WIN32)
+        set(OBS_PLUGIN_DESTINATION "obs-plugins/64bit")
+    elseif(APPLE)
+        set(OBS_PLUGIN_DESTINATION "obs-plugins")
+    else()
+        set(OBS_PLUGIN_DESTINATION "${CMAKE_INSTALL_LIBDIR}/obs-plugins")
+    endif()
+endif()
+if(NOT DEFINED OBS_DATA_DESTINATION)
+    if(WIN32)
+        set(OBS_DATA_DESTINATION "data/obs-plugins")
+    elseif(APPLE)
+        set(OBS_DATA_DESTINATION "data/obs-plugins")
+    else()
+        set(OBS_DATA_DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/obs/obs-plugins")
+    endif()
+endif()
+
 # 1. Plugin Definition
 add_library(flood-tuber MODULE)
-set_target_properties_obs(flood-tuber PROPERTIES FOLDER plugins PREFIX "")
+if(COMMAND set_target_properties_obs)
+    set_target_properties_obs(flood-tuber PROPERTIES FOLDER plugins PREFIX "")
+else()
+    set_target_properties(flood-tuber PROPERTIES
+        PREFIX ""
+        FOLDER plugins
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/obs-plugins"
+    )
+endif()
 
 # Version passed to C++ code via compile define (single source of truth)
 target_compile_definitions(flood-tuber PRIVATE
@@ -63,3 +93,12 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data")
         )
     endforeach()
 endif()
+
+# 6. Install rules
+install(TARGETS flood-tuber
+    LIBRARY DESTINATION "${OBS_PLUGIN_DESTINATION}"
+    RUNTIME DESTINATION "${OBS_PLUGIN_DESTINATION}")
+
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/data/"
+    DESTINATION "${OBS_DATA_DESTINATION}/flood-tuber"
+    USE_SOURCE_PERMISSIONS)

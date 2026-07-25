@@ -30,9 +30,9 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
 *   **[Resmi OBS Kaynaklar Sayfası](https://obsproject.com/forum/resources/flood-tuber-native-pngtuber-plugin.2336/)**
 *   **[GitHub Sürümler (Releases)](https://github.com/justflood/flood-tuber/releases/latest)** (Önerilen)
 
-İki kurulum yöntemi vardır:
+### Windows
 
-### Seçenek 1: Yükleyici (Önerilen)
+#### Seçenek 1: Yükleyici (Önerilen)
 1.  `FloodTuber-Installer-x.x.x.exe` dosyasını indirin.
 2.  Yükleyiciyi çalıştırın.
     > **⚠️ "Windows kişisel bilgisayarınızı korudu" uyarısı hakkında not:**
@@ -42,12 +42,71 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
     > *   **"Yine de Çalıştır" (Run Anyway)** butonuna basın.
 3.  Kurulum sihirbazındaki adımları takip edin.
 
-### Seçenek 2: Taşınabilir / Zip (Manuel)
+#### Seçenek 2: Taşınabilir / Zip (Manuel)
 1.  `FloodTuber-Portable-vx.x.x.zip` dosyasını indirin.
 2.  Dosyaları bir klasöre çıkarın.
 3.  `flood-tuber.dll` dosyasını OBS eklenti klasörünüze kopyalayın (genellikle `C:\Program Files\obs-studio\obs-plugins\64bit`).
 4.  `data/obs-plugins` klasörü içindeki `flood-tuber` klasörünü OBS veri dizinine kopyalayın (genellikle `C:\Program Files\obs-studio\data\obs-plugins\flood-tuber`).
 5.  OBS Studio'yu yeniden başlatın.
+
+### macOS
+
+#### Kaynak koddan derleme
+
+**Gereksinimler:** OBS Studio (Homebrew), CMake, Git ve Xcode Command Line Tools.
+
+```bash
+# Bağımlılıkları yükleyin
+brew install cmake obs-studio
+```
+
+**Derleme ve kurulum:**
+
+```bash
+git clone https://github.com/justflood/flood-tuber.git
+cd flood-tuber
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+sudo cmake --install build --prefix /usr/local
+```
+
+#### Manuel kurulum (taşınabilir)
+
+1. Yukarıdaki gibi derleyin.
+2. `build/flood-tuber.so` dosyasını `~/Library/Application Support/obs-studio/plugins/flood-tuber/bin/` dizinine kopyalayın.
+3. `data/` dizinindeki içerikleri `~/Library/Application Support/obs-studio/plugins/flood-tuber/data/` dizinine kopyalayın.
+4. OBS Studio'yu yeniden başlatın.
+
+### Linux
+
+#### Kaynak koddan derleme
+
+**Gereksinimler:** OBS Studio geliştirme başlıkları, CMake, Git ve bir C++ derleyicisi.
+
+```bash
+# Ubuntu/Debian
+sudo apt install build-essential cmake git libobs-dev
+
+# Fedora
+sudo dnf install cmake git obs-studio-devel
+```
+
+**Derleme ve kurulum:**
+
+```bash
+git clone https://github.com/justflood/flood-tuber.git
+cd flood-tuber
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+sudo cmake --install build --prefix /usr
+```
+
+#### Manuel kurulum (taşınabilir)
+
+1. Yukarıdaki gibi derleyin.
+2. `build/flood-tuber.so` dosyasını `~/.config/obs-studio/plugins/flood-tuber/bin/64bit/` dizinine kopyalayın.
+3. `data/` dizinindeki içerikleri `~/.config/obs-studio/plugins/flood-tuber/data/` dizinine kopyalayın.
+4. OBS Studio'yu yeniden başlatın.
 
 ## Kullanım
 
