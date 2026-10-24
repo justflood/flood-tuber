@@ -88,13 +88,13 @@ static void update_image(FloodImage *image, const char *path)
                      
                      // Fallback to standard OBS loader for static PNGs or if APNG load failed
                      image->type = FloodImage::OBS_STANDARD;
-                     gs_image_file_init(&image->obs_image, path);
-                     gs_image_file_init_texture(&image->obs_image);
+                     flood_image_file_init(&image->obs_image, path);
+                     flood_image_file_init_texture(&image->obs_image);
                 }
             } else {
                 image->type = FloodImage::OBS_STANDARD;
-                gs_image_file_init(&image->obs_image, path);
-                gs_image_file_init_texture(&image->obs_image);
+                flood_image_file_init(&image->obs_image, path);
+                flood_image_file_init_texture(&image->obs_image);
             }
         }
     }
@@ -118,8 +118,8 @@ static void flood_image_tick(FloodImage *img, uint64_t elapsed_ns) {
             }
         }
     } else {
-        gs_image_file_tick(&img->obs_image, elapsed_ns);
-        gs_image_file_update_texture(&img->obs_image);
+        flood_image_file_tick(&img->obs_image, elapsed_ns);
+        flood_image_file_update_texture(&img->obs_image);
     }
 }
 
@@ -286,7 +286,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
 
 	// Tick animations for all images
-	// Convert seconds to nanoseconds for gs_image_file_tick
+	// Convert seconds to nanoseconds for flood_image_file_tick
 	uint64_t elapsed_ns = (uint64_t)(seconds * 1000000000.0f);
 
     obs_enter_graphics(); // Required for standard texture updates

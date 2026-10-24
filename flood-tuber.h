@@ -14,6 +14,24 @@
 #endif
 #define BLOG(level, format, ...) blog(level, "[Flood-Tuber] " format, ##__VA_ARGS__)
 
+// OBS 33 removed the gs_image_file_* API in favor of gs_image_file_ex_*,
+// which takes an explicit alpha mode. Pick the right one at compile time.
+#if LIBOBS_API_MAJOR_VER >= 33
+typedef gs_image_file_ex_t flood_image_file_t;
+#define flood_image_file_init(image, file) gs_image_file_ex_init(image, file, GS_IMAGE_ALPHA_STRAIGHT)
+#define flood_image_file_free gs_image_file_ex_free
+#define flood_image_file_init_texture gs_image_file_ex_init_texture
+#define flood_image_file_tick gs_image_file_ex_tick
+#define flood_image_file_update_texture gs_image_file_ex_update_texture
+#else
+typedef gs_image_file_t flood_image_file_t;
+#define flood_image_file_init gs_image_file_init
+#define flood_image_file_free gs_image_file_free
+#define flood_image_file_init_texture gs_image_file_init_texture
+#define flood_image_file_tick gs_image_file_tick
+#define flood_image_file_update_texture gs_image_file_update_texture
+#endif
+
 // Represents the current animation state of the avatar
 enum class AvatarState {
 	IDLE,       // Default state, no sound
@@ -32,13 +50,13 @@ enum class TalkingEffect {
 // Wrapper for different image types (OBS standard or Custom)
 struct FloodImage {
     enum Type {
-        OBS_STANDARD, // Uses gs_image_file_t (GIF, JPEG, PNG, etc.)
+        OBS_STANDARD, // Uses flood_image_file_t (GIF, JPEG, PNG, etc.)
         CUSTOM_WEBP,  // Uses WebPDecoder
         CUSTOM_APNG   // Uses APNGDecoder (Future)
     } type;
 
     // Standard OBS loader
-    gs_image_file_t obs_image;
+    flood_image_file_t obs_image;
 
     // Custom decoders
     WebPDecoder* webp_decoder = nullptr;
@@ -49,7 +67,7 @@ struct FloodImage {
 
     FloodImage() {
         type = OBS_STANDARD;
-        gs_image_file_init(&obs_image, NULL);
+        flood_image_file_init(&obs_image, NULL);
     }
 
     // Helper: Free resources
@@ -62,7 +80,7 @@ struct FloodImage {
             delete apng_decoder;
             apng_decoder = nullptr;
         }
-        gs_image_file_free(&obs_image);
+        flood_image_file_free(&obs_image);
         type = OBS_STANDARD;
     }
 };
