@@ -8,7 +8,29 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
+#else
+#include <unistd.h>
 #endif
+
+static void open_in_system(const char *path_or_url)
+{
+	if (!path_or_url || !*path_or_url)
+		return;
+
+#ifdef _WIN32
+	ShellExecuteA(NULL, "open", path_or_url, NULL, NULL, SW_SHOWNORMAL);
+#elif __APPLE__
+	if (fork() == 0) {
+		execlp("open", "open", path_or_url, (char *)NULL);
+		_exit(1);
+	}
+#else
+	if (fork() == 0) {
+		execlp("xdg-open", "xdg-open", path_or_url, (char *)NULL);
+		_exit(1);
+	}
+#endif
+}
 
 // Returns the custom avatars folder path from source settings.
 // Returns NULL if not set. Do NOT free the returned pointer.
@@ -461,20 +483,15 @@ static bool open_library_folder(obs_properties_t *props, obs_property_t *p, void
 	obs_data_t *settings = obs_source_get_settings(tuber->source);
 	if (!settings) return false;
 
-	const char *custom = get_custom_dir(settings);
+		const char *custom = get_custom_dir(settings);
 	if (custom) {
 		BLOG(LOG_INFO, "open_folder: opening %s", custom);
-#ifdef _WIN32
-		ShellExecuteA(NULL, "open", custom, NULL, NULL, SW_SHOWDEFAULT);
-#endif
+		open_in_system(custom);
 	} else {
-		// No custom folder set — open built-in avatars dir
 		char *data_dir = obs_module_file("avatars");
 		if (data_dir) {
 			BLOG(LOG_INFO, "open_folder: no custom dir, opening built-in: %s", data_dir);
-#ifdef _WIN32
-			ShellExecuteA(NULL, "open", data_dir, NULL, NULL, SW_SHOWDEFAULT);
-#endif
+			open_in_system(data_dir);
 			bfree(data_dir);
 		}
 	}
@@ -517,10 +534,7 @@ static void add_file_prop(obs_properties_t *props, const char *name, const char 
 static bool open_github_page(obs_properties_t *props, obs_property_t *p, void *data)
 {
 	(void)props; (void)p; (void)data;
-#ifdef _WIN32
-	ShellExecuteA(NULL, "open", "https://github.com/justflood/flood-tuber",
-	              NULL, NULL, SW_SHOWNORMAL);
-#endif
+	open_in_system("https://github.com/justflood/flood-tuber");
 	return false;
 }
 
@@ -528,10 +542,7 @@ static bool open_github_page(obs_properties_t *props, obs_property_t *p, void *d
 static bool open_website_page(obs_properties_t *props, obs_property_t *p, void *data)
 {
 	(void)props; (void)p; (void)data;
-#ifdef _WIN32
-	ShellExecuteA(NULL, "open", "https://floodtechlab.com/floodtuber/",
-	              NULL, NULL, SW_SHOWNORMAL);
-#endif
+	open_in_system("https://floodtechlab.com/floodtuber/");
 	return false;
 }
 

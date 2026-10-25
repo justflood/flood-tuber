@@ -3,6 +3,11 @@
 #include <util/dstr.h>
 #include <math.h>
 
+#ifndef _WIN32
+#include <strings.h>
+#define _strcmpi strcasecmp
+#endif
+
 
 // Validate file headers to prevent crashes (e.g. renamed .txt files)
 static bool check_file_signature(const char *path) {
