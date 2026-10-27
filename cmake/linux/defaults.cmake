@@ -49,8 +49,61 @@ include(CPack)
 find_package(libobs QUIET)
 
 if(NOT TARGET OBS::libobs)
-  find_package(LibObs REQUIRED)
-  add_library(OBS::libobs ALIAS libobs)
+  find_package(LibObs QUIET)
+  if(TARGET libobs)
+    add_library(OBS::libobs ALIAS libobs)
+  elseif(NOT TARGET OBS::libobs)
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+      pkg_check_modules(LIBOBS QUIET libobs)
+    endif()
+
+    if(LIBOBS_FOUND)
+      add_library(OBS::libobs INTERFACE IMPORTED)
+      target_include_directories(OBS::libobs INTERFACE ${LIBOBS_INCLUDE_DIRS})
+      target_link_libraries(OBS::libobs INTERFACE ${LIBOBS_LINK_LIBRARIES})
+    else()
+      message(STATUS "libobs not found in system paths; fetching headers from obs-studio...")
+      if(POLICY CMP0169)
+        cmake_policy(SET CMP0169 OLD)
+      endif()
+      include(FetchContent)
+      FetchContent_Declare(
+        obs_headers
+        GIT_REPOSITORY https://github.com/obsproject/obs-studio.git
+        GIT_TAG        33.0.0
+        GIT_SHALLOW    TRUE
+      )
+      FetchContent_GetProperties(obs_headers)
+      if(NOT obs_headers_POPULATED)
+        FetchContent_Populate(obs_headers)
+      endif()
+
+      FetchContent_Declare(
+        simde
+        GIT_REPOSITORY https://github.com/simd-everywhere/simde.git
+        GIT_TAG        v0.8.2
+        GIT_SHALLOW    TRUE
+      )
+      FetchContent_GetProperties(simde)
+      if(NOT simde_POPULATED)
+        FetchContent_Populate(simde)
+      endif()
+
+      if(NOT EXISTS "${obs_headers_BINARY_DIR}/obsconfig.h")
+        file(WRITE "${obs_headers_BINARY_DIR}/obsconfig.h" "#pragma once\n")
+      endif()
+
+      add_library(OBS::libobs INTERFACE IMPORTED)
+      target_include_directories(OBS::libobs INTERFACE 
+        ${obs_headers_SOURCE_DIR}/libobs
+        ${obs_headers_SOURCE_DIR}/libobs/util
+        ${obs_headers_SOURCE_DIR}/libobs/graphics
+        ${obs_headers_BINARY_DIR}
+        ${simde_SOURCE_DIR}
+      )
+    endif()
+  endif()
 
   if(ENABLE_FRONTEND_API)
     find_path(

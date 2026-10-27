@@ -46,11 +46,38 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
     > *   **"Yine de Çalıştır" (Run Anyway)** butonuna basın.
 3.  Kurulum sihirbazındaki adımları takip edin. Yükleyici eklentiyi otomatik olarak standart OBS eklenti dizinine (`C:\ProgramData\obs-studio\plugins\flood-tuber`) kurar ve `C:\Program Files\obs-studio` altındaki eski sürüm kalıntılarını temizler.
 
-### Seçenek 2: Taşınabilir / Zip (Manuel)
+### Seçenek 2: Taşınabilir / Zip (Manuel - Windows)
 1.  `FloodTuber-Portable-v1.2.0.zip` dosyasını indirin.
 2.  Arşiv içindeki `flood-tuber` klasörünü doğrudan `C:\ProgramData\obs-studio\plugins\` dizinine çıkarın (`C:\ProgramData\obs-studio\plugins\flood-tuber\flood-tuber.dll` ve `C:\ProgramData\obs-studio\plugins\flood-tuber\data` oluşacak şekilde).
 3.  *(Eğer v1.1.0 veya daha eski bir sürümden manuel güncelliyorsanız)* Eski `C:\Program Files\obs-studio\obs-plugins\64bit\flood-tuber.dll` dosyasını ve `C:\Program Files\obs-studio\data\obs-plugins\flood-tuber` klasörünü silin.
 4.  OBS Studio'yu yeniden başlatın.
+
+### Seçenek 3: Linux (Derleme ve Kurulum)
+1. Gerekli bağımlılıkları yükleyin (Ubuntu/Debian örneği):
+   ```bash
+   sudo apt install build-essential cmake libobs-dev libwebp-dev
+   ```
+2. Eklentiyi derleyin:
+   ```bash
+   cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+   cmake --build build -j$(nproc)
+   ```
+3. OBS eklenti dizininize kurun:
+   * **Yerel / Sistem OBS:**
+     ```bash
+     mkdir -p ~/.config/obs-studio/plugins/flood-tuber/bin/64bit
+     mkdir -p ~/.config/obs-studio/plugins/flood-tuber/data
+     cp build/flood-tuber.so ~/.config/obs-studio/plugins/flood-tuber/bin/64bit/
+     cp -r data/* ~/.config/obs-studio/plugins/flood-tuber/data/
+     ```
+   * **Flatpak OBS:**
+     ```bash
+     mkdir -p ~/.var/app/com.obsproject.Studio/config/obs-studio/plugins/flood-tuber/bin/64bit
+     mkdir -p ~/.var/app/com.obsproject.Studio/config/obs-studio/plugins/flood-tuber/data
+     cp build/flood-tuber.so ~/.var/app/com.obsproject.Studio/config/obs-studio/plugins/flood-tuber/bin/64bit/
+     cp -r data/* ~/.var/app/com.obsproject.Studio/config/obs-studio/plugins/flood-tuber/data/
+     ```
+4. OBS Studio'yu yeniden başlatın.
 
 ## Kullanım
 

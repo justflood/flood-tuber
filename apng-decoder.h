@@ -44,5 +44,4 @@ private:
     uint64_t total_duration_ms = 0;
 
     bool ParseChunks(const std::vector<unsigned char>& source);
-    void DecodeFrame(const APNGFrameInfo& info, std::vector<unsigned char>& canvas, std::vector<unsigned char>& prev_canvas);
 };
