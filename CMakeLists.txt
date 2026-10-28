@@ -30,6 +30,10 @@ target_compile_definitions(${_target_name} PRIVATE
     FLOOD_TUBER_VERSION="${PROJECT_VERSION}"
 )
 
+target_compile_options(${_target_name} PRIVATE
+    $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wno-unused-variable -Wno-unused-parameter>
+)
+
 # Dependencies (libwebp)
 if(POLICY CMP0169)
     cmake_policy(SET CMP0169 OLD)

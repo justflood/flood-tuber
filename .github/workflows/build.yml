@@ -1,0 +1,135 @@
+name: Build Plugin
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - 'release/**'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+      - main
+
+jobs:
+  build-linux:
+    name: Build Linux 🐧
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            ninja-build \
+            libwebp-dev \
+            pkg-config
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cmake --build build
+
+      - name: Prepare Linux artifacts
+        run: |
+          mkdir -p dist/flood-tuber/bin/64bit
+          mkdir -p dist/flood-tuber/data
+          cp build/flood-tuber.so dist/flood-tuber/bin/64bit/
+          cp -r data/* dist/flood-tuber/data/
+          cd dist && tar -czvf ../flood-tuber-linux.tar.gz flood-tuber
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flood-tuber-linux
+          path: flood-tuber-linux.tar.gz
+
+  build-windows:
+    name: Build Windows 🪟
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build Plugin 🧱
+        uses: ./.github/actions/build-plugin
+        with:
+          target: x64
+          config: RelWithDebInfo
+
+      - name: Package Plugin 📀
+        uses: ./.github/actions/package-plugin
+        with:
+          target: x64
+          config: RelWithDebInfo
+          package: true
+
+      - name: Upload Windows Artifacts 📡
+        uses: actions/upload-artifact@v4
+        with:
+          name: flood-tuber-windows
+          path: |
+            ${{ github.workspace }}/release/FloodTuber-Installer-*.exe
+            ${{ github.workspace }}/release/FloodTuber-Portable-*.zip
+
+  build-macos:
+    name: Build macOS 🍏
+    runs-on: macos-15
+    defaults:
+      run:
+        shell: zsh --no-rcs --errexit --pipefail {0}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set Up Environment 🔧
+        run: |
+          print '::group::Enable Xcode 16.1'
+          sudo xcode-select --switch /Applications/Xcode_16.1.0.app/Contents/Developer
+          print '::endgroup::'
+
+      - name: Build Plugin 🧱
+        uses: ./.github/actions/build-plugin
+        with:
+          target: macos-universal
+          config: RelWithDebInfo
+          codesign: false
+
+      - name: Package Plugin 📀
+        uses: ./.github/actions/package-plugin
+        with:
+          target: macos-universal
+          config: RelWithDebInfo
+          package: false
+          codesign: false
+          notarize: false
+
+      - name: Upload macOS Artifacts 📡
+        uses: actions/upload-artifact@v4
+        with:
+          name: flood-tuber-macos-universal
+          path: ${{ github.workspace }}/release/flood-tuber-*-macos-universal.*
