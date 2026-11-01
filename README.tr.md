@@ -16,6 +16,7 @@
 *   **🌊 Hareket Efektleri (Motion):**
     *   **Shake (Titreme):** Konuşurken avatar titrer.
     *   **Bounce (Zıplama):** Konuşurken avatar yukarı aşağı zıplar.
+    *   **Oscillating (Salınım):** Avatar, sinüs dalgası gibi hareket eder.
     *   **None (Yok):** Sabit durur.
 *   **🎞️ Gelişmiş Animasyon Desteği:** **APNG**, **WebP** ve **GIF** formatları için tam destek.
     *   **Akıllı Algılama:** Dosya uzantısı yanlış olsa bile (.png olarak kaydedilmiş APNG gibi) animasyonları otomatik algılar.
@@ -78,6 +79,7 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
      cp -r data/* ~/.var/app/com.obsproject.Studio/config/obs-studio/plugins/flood-tuber/data/
      ```
 4. OBS Studio'yu yeniden başlatın.
+
 
 ## Kullanım
 

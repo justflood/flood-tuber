@@ -133,4 +133,3 @@ jobs:
         with:
           name: flood-tuber-macos-universal
           path: ${{ github.workspace }}/release/flood-tuber-*-macos-universal.*
-

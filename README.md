@@ -16,6 +16,7 @@
 *   **🌊 Motion Effects:**
     *   **Shake:** Avatar vibrates/shakes when talking.
     *   **Bounce:** Avatar bounces up and down when talking.
+    *   **Oscillating:** Avatar moves like a sine wave.
     *   **None:** Static talking image.
 *   **🎞️ Advanced Animations:** Full support for **APNG**, **WebP**, and **GIF** formats.
     *   **Smart Detection:** Automatically detects animations even if file extensions are incorrect (e.g. APNG saved as `.png`).

@@ -44,7 +44,8 @@ enum class AvatarState {
 enum class TalkingEffect {
 	NONE,
 	BOUNCE,     // Vertical jumping motion
-	SHAKE       // Random jitter/vibration
+	SHAKE,      // Random jitter/vibration
+	OSCILLATING      // Smooth figure-eight drift
 };
 
 // Wrapper for different image types (OBS standard or Custom)
@@ -61,7 +62,7 @@ struct FloodImage {
     // Custom decoders
     WebPDecoder* webp_decoder = nullptr;
     APNGDecoder* apng_decoder = nullptr;
-    
+
     // Animation state for custom decoders
     uint64_t anim_time_ns = 0;
 
@@ -85,9 +86,26 @@ struct FloodImage {
     }
 };
 
+#define FLOOD_SLOT_COUNT 10
+
+struct flood_tuber_data;
+
+// Raccourci « emplacement » : retient son instance et son index (1..10)
+struct flood_slot_hotkey {
+	struct flood_tuber_data *tuber;
+	int index;
+	obs_hotkey_id id;
+};
+
 struct flood_tuber_data {
-	obs_source_t *source;       // The OBS source instance for this plugin
-	obs_source_t *audio_source; // The external audio source we are monitoring
+	obs_source_t *source;             // The OBS source instance for this plugin
+    obs_weak_source_t *audio_source; // Mic source, resolved by name after startup
+    // -- Hotkey --
+   	obs_hotkey_id hotkey_next;   // Avatar Next
+	obs_hotkey_id hotkey_prev;   // Avatar Prev
+	struct flood_slot_hotkey slot_hotkeys[FLOOD_SLOT_COUNT];
+    char audio_source_name[256];
+    uint64_t capture_check_time;
 
 	// -- Image Assets (Using Wrapper) --
 	FloodImage image_idle;
@@ -96,7 +114,7 @@ struct flood_tuber_data {
 	FloodImage image_talking_1;
 	FloodImage image_talking_2;
 	FloodImage image_talking_3;
-	
+
 	// Variants for blinking while talking
 	FloodImage image_talking_1_blink;
 	FloodImage image_talking_2_blink;
@@ -137,4 +155,5 @@ struct flood_tuber_data {
 	float timer_effect;        // Continuous timer for sin/cos motion calculations
 	float offset_x;            // Calculated X offset for rendering
 	float offset_y;            // Calculated Y offset for rendering
+		uint32_t reference_height; // Common display height (px); offsets are a % of it
 };
