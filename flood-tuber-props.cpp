@@ -272,6 +272,11 @@ void flood_tuber_defaults(obs_data_t *settings)
 	obs_data_set_default_int(settings,    "motion_strength",    1);
 	obs_data_set_default_int(settings, "reference_height", 512);
 	obs_data_set_default_bool(settings, "keep_audio_on_switch", false);
+	// Avatar transition (crossfade between avatars)
+	obs_data_set_default_bool(settings, "avatar_fade_enabled", true);
+	obs_data_set_default_int(settings, "avatar_fade_duration", 300);
+	obs_data_set_default_string(settings, "avatar_fade_easing", "Smooth");
+	obs_data_set_default_string(settings, "hint_fade", obs_module_text("hint_fade"));
 
 	apply_avatar_to_settings(settings, "Flood Tuber Avatar", true);
 	obs_data_set_default_string(settings, "avatar_list", "Flood Tuber Avatar");
@@ -708,6 +713,27 @@ obs_properties_t *flood_tuber_properties(void *data)
 	obs_data_t *cur = (tuber && tuber->source) ? obs_source_get_settings(tuber->source) : NULL;
 	fill_all_lists(lib, cur);
 	if (cur) obs_data_release(cur);
+
+	// ── 1b. Avatar Transition ──────────────────────────────────────────────
+	obs_properties_t *fade = obs_properties_create();
+	obs_properties_add_group(props, "fade_settings",
+		obs_module_text("fade_settings"), OBS_GROUP_NORMAL, fade);
+
+	obs_properties_add_text(fade, "hint_fade", NULL, OBS_TEXT_INFO);
+
+	obs_properties_add_bool(fade, "avatar_fade_enabled",
+		obs_module_text("avatar_fade_enabled"));
+
+	obs_property_t *p_fade_ms = obs_properties_add_int_slider(fade,
+		"avatar_fade_duration", obs_module_text("avatar_fade_duration"), 100, 1500, 50);
+	obs_property_int_set_suffix(p_fade_ms, " ms");
+	obs_property_set_long_description(p_fade_ms, obs_module_text("avatar_fade_duration_tooltip"));
+
+	obs_property_t *p_fade_easing = obs_properties_add_list(fade, "avatar_fade_easing",
+		obs_module_text("avatar_fade_easing"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+	obs_property_list_add_string(p_fade_easing, obs_module_text("avatar_fade_easing_linear"), "Linear");
+	obs_property_list_add_string(p_fade_easing, obs_module_text("avatar_fade_easing_smooth"), "Smooth");
+	obs_property_set_long_description(p_fade_easing, obs_module_text("avatar_fade_easing_tooltip"));
 
 	// ── 2. Avatar Images ───────────────────────────────────────────────────
 	obs_properties_t *img = obs_properties_create();

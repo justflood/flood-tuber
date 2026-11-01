@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <utility>
 
 #ifdef _WIN32
 #define STRCMPI _strcmpi
@@ -202,6 +203,307 @@ static uint32_t flood_image_get_height(FloodImage *img) {
 }
 
 
+
+// ── Crossfade between avatars ─────────────────────────────────────────────
+
+// Hash of the 9 image paths. It changes only when the avatar itself changes.
+static uint64_t avatar_paths_hash(obs_data_t *settings)
+{
+	static const char *const keys[] = {
+		"path_idle",         "path_blink",        "path_action",
+		"path_talk_1",       "path_talk_2",       "path_talk_3",
+		"path_talk_1_blink", "path_talk_2_blink", "path_talk_3_blink",
+	};
+
+	uint64_t hash = 1469598103934665603ULL; // FNV-1a, 64 bits
+	for (size_t k = 0; k < sizeof(keys) / sizeof(keys[0]); k++) {
+		const char *s = obs_data_get_string(settings, keys[k]);
+		if (!s)
+			s = "";
+		for (; *s; s++) {
+			hash ^= (uint64_t)(unsigned char)*s;
+			hash *= 1099511628211ULL;
+		}
+		hash ^= 0xFFULL; // separator between two paths
+		hash *= 1099511628211ULL;
+	}
+	return hash;
+}
+
+// Shader that blends the outgoing avatar (texA) and the new one (texB) pixel by pixel.
+// Each pixel mixes the two colors weighted by their own alpha, so transparent areas stay
+// transparent and no dark halo appears mid-fade. rect_a / rect_b give where each image
+// sits inside the shared reference box (x, y, width, height).
+static const char *const FLOOD_FADE_EFFECT = R"effect(
+uniform float4x4 ViewProj;
+uniform texture2d texA;
+uniform texture2d texB;
+uniform float2 box_size;
+uniform float4 rect_a;
+uniform float4 rect_b;
+uniform float fade_t;
+
+sampler_state textureSampler {
+	Filter   = Linear;
+	AddressU = Clamp;
+	AddressV = Clamp;
+};
+
+struct VertData {
+	float4 pos : POSITION;
+	float2 uv  : TEXCOORD0;
+};
+
+VertData VSFade(VertData v_in)
+{
+	VertData v_out;
+	v_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+	v_out.uv  = v_in.uv;
+	return v_out;
+}
+
+// 1 when the image has a size and the point lies inside it, 0 otherwise
+float image_mask(float2 uv, float4 rect)
+{
+	bool valid  = rect.z > 0.0 && rect.w > 0.0;
+	bool inside = uv.x >= 0.0 && uv.y >= 0.0 && uv.x <= 1.0 && uv.y <= 1.0;
+	return (valid && inside) ? 1.0 : 0.0;
+}
+
+float4 PSFade(VertData v_in) : TARGET
+{
+	float2 p  = v_in.uv * box_size;
+	float2 ua = (p - rect_a.xy) / max(rect_a.zw, float2(0.0001, 0.0001));
+	float2 ub = (p - rect_b.xy) / max(rect_b.zw, float2(0.0001, 0.0001));
+
+	float4 a = texA.Sample(textureSampler, saturate(ua)) * image_mask(ua, rect_a);
+	float4 b = texB.Sample(textureSampler, saturate(ub)) * image_mask(ub, rect_b);
+
+	float wa    = a.a * (1.0 - fade_t);
+	float wb    = b.a * fade_t;
+	float alpha = wa + wb;
+	float3 rgb  = (a.rgb * wa + b.rgb * wb) / max(alpha, 0.0001);
+	return float4(rgb, alpha);
+}
+
+technique Draw
+{
+	pass
+	{
+		vertex_shader = VSFade(v_in);
+		pixel_shader  = PSFade(v_in);
+	}
+}
+)effect";
+
+// Creates the fade shader once per source. Must run in the graphics context.
+static bool ensure_fade_effect(struct flood_tuber_data *data)
+{
+	if (data->fade_effect)
+		return true;
+	if (data->fade_effect_failed)
+		return false;
+
+	char *errors = NULL;
+	data->fade_effect = gs_effect_create(FLOOD_FADE_EFFECT, "flood-tuber-fade.effect", &errors);
+	if (!data->fade_effect) {
+		data->fade_effect_failed = true;
+		BLOG(LOG_WARNING, "Avatar fade disabled, shader failed to compile: %s",
+		     errors ? errors : "unknown error");
+	}
+	if (errors)
+		bfree(errors);
+	return data->fade_effect != NULL;
+}
+
+// Called from flood_tuber_update() when the avatar changes, in the graphics context.
+// The displayed avatar moves to 'prev' so its textures stay alive during the fade,
+// then 'cur' is reloaded with the new avatar. A fade still running is cut short:
+// the latest request wins.
+static void begin_avatar_fade(struct flood_tuber_data *data, bool fade)
+{
+	data->prev.Free();
+	data->transition.active = false;
+
+	if (!fade || !ensure_fade_effect(data))
+		return;
+
+	std::swap(data->prev, data->cur);
+	data->transition.elapsed = 0.0f;
+	data->transition.duration = data->fade_duration;
+	data->transition.active = true;
+}
+
+// Advances the animation of every image of one avatar
+static void flood_avatar_tick(AvatarImages *set, uint64_t elapsed_ns)
+{
+	flood_image_tick(&set->image_idle, elapsed_ns);
+	flood_image_tick(&set->image_blink, elapsed_ns);
+	flood_image_tick(&set->image_action, elapsed_ns);
+	flood_image_tick(&set->image_talking_1, elapsed_ns);
+	flood_image_tick(&set->image_talking_2, elapsed_ns);
+	flood_image_tick(&set->image_talking_3, elapsed_ns);
+	flood_image_tick(&set->image_talking_1_blink, elapsed_ns);
+	flood_image_tick(&set->image_talking_2_blink, elapsed_ns);
+	flood_image_tick(&set->image_talking_3_blink, elapsed_ns);
+}
+
+// Advances the fade by 'seconds'. Runs in the graphics context: the outgoing avatar is released at the end.
+static void update_avatar_transition(struct flood_tuber_data *data, float seconds)
+{
+	data->transition.elapsed += seconds;
+	if (data->transition.elapsed >= data->transition.duration) {
+		data->transition.elapsed = data->transition.duration;
+		data->transition.active = false;
+		data->prev.Free();
+	}
+}
+
+// Rectangle where a texture is drawn inside the reference box: aspect kept, centered
+struct FloodFitRect {
+	int x;
+	int y;
+	int w;
+	int h;
+};
+
+static FloodFitRect fit_in_reference_box(gs_texture_t *tex, uint32_t ref_w, uint32_t ref_h)
+{
+	FloodFitRect r = {0, 0, 0, 0};
+	if (!tex)
+		return r;
+
+	uint32_t tw = gs_texture_get_width(tex);
+	uint32_t th = gs_texture_get_height(tex);
+	float scale = (tw && th) ? fminf((float)ref_w / (float)tw, (float)ref_h / (float)th) : 1.0f;
+
+	r.w = (int)lroundf((float)tw * scale);
+	r.h = (int)lroundf((float)th * scale);
+	r.x = ((int)ref_w - r.w) / 2;
+	r.y = ((int)ref_h - r.h) / 2;
+	return r;
+}
+
+// Picks the frame to show from one avatar's images, according to the current animation state
+static gs_texture_t *select_avatar_texture(struct flood_tuber_data *data, AvatarImages *s)
+{
+	gs_texture_t *tex = flood_image_get_texture(&s->image_idle);
+
+	if (data->current_state == AvatarState::ACTION && flood_image_get_texture(&s->image_action)) {
+		tex = flood_image_get_texture(&s->image_action);
+	}
+	else if (data->current_state == AvatarState::TALKING) {
+		bool blink = data->is_blinking_now;
+
+		int idx = data->talking_frame_index;
+		FloodImage *talk_img = nullptr;
+		FloodImage *talk_blink_img = nullptr;
+
+		// Select based on index
+		if (idx == 0) {
+			talk_img = &s->image_talking_1;
+			talk_blink_img = &s->image_talking_1_blink;
+		} else if (idx == 1) {
+			talk_img = &s->image_talking_2;
+			talk_blink_img = &s->image_talking_2_blink;
+		} else {
+			talk_img = &s->image_talking_3;
+			talk_blink_img = &s->image_talking_3_blink;
+		}
+
+		// Fallbacks
+		if (!flood_image_get_texture(talk_img) && idx == 2) {
+			talk_img = &s->image_talking_2;
+			talk_blink_img = &s->image_talking_2_blink;
+			idx = 1;
+		}
+		if (!flood_image_get_texture(talk_img) && idx == 1) {
+			talk_img = &s->image_talking_1;
+			talk_blink_img = &s->image_talking_1_blink;
+		}
+
+		// Determine final texture
+		if (blink && talk_blink_img && flood_image_get_texture(talk_blink_img)) {
+			tex = flood_image_get_texture(talk_blink_img);
+		} else if (talk_img && flood_image_get_texture(talk_img)) {
+			tex = flood_image_get_texture(talk_img);
+		}
+
+		// Final fallback for blinking if specific talk-blink is missing
+		if (blink && (!talk_blink_img || !flood_image_get_texture(talk_blink_img)) && flood_image_get_texture(&s->image_blink)) {
+			tex = flood_image_get_texture(&s->image_blink);
+		}
+	}
+	else {
+		if (data->is_blinking_now && flood_image_get_texture(&s->image_blink)) {
+			tex = flood_image_get_texture(&s->image_blink);
+		} else {
+			tex = flood_image_get_texture(&s->image_idle);
+		}
+	}
+	return tex;
+}
+
+// Draws the outgoing and the new avatar in the reference box, blended by the fade shader.
+// The caller has already set the matrix (motion offset, mirror).
+static void draw_avatar_crossfade(struct flood_tuber_data *data, gs_texture_t *tex_old, gs_texture_t *tex_new,
+				  uint32_t ref_w, uint32_t ref_h)
+{
+	gs_effect_t *effect = data->fade_effect;
+	gs_texture_t *any_tex = tex_new ? tex_new : tex_old;
+
+	float t = 1.0f;
+	if (data->transition.duration > 0.0f)
+		t = data->transition.elapsed / data->transition.duration;
+	t = fminf(fmaxf(t, 0.0f), 1.0f);
+	if (data->fade_smooth)
+		t = t * t * (3.0f - 2.0f * t);
+
+	FloodFitRect ra = fit_in_reference_box(tex_old, ref_w, ref_h);
+	FloodFitRect rb = fit_in_reference_box(tex_new, ref_w, ref_h);
+
+	struct vec2 box_px;
+	struct vec4 vec_a;
+	struct vec4 vec_b;
+	vec2_set(&box_px, (float)ref_w, (float)ref_h);
+	vec4_set(&vec_a, (float)ra.x, (float)ra.y, (float)ra.w, (float)ra.h);
+	vec4_set(&vec_b, (float)rb.x, (float)rb.y, (float)rb.w, (float)rb.h);
+
+	gs_eparam_t *p_a = gs_effect_get_param_by_name(effect, "texA");
+	gs_eparam_t *p_b = gs_effect_get_param_by_name(effect, "texB");
+	gs_eparam_t *p_box = gs_effect_get_param_by_name(effect, "box_size");
+	gs_eparam_t *p_ra = gs_effect_get_param_by_name(effect, "rect_a");
+	gs_eparam_t *p_rb = gs_effect_get_param_by_name(effect, "rect_b");
+	gs_eparam_t *p_t = gs_effect_get_param_by_name(effect, "fade_t");
+
+	// Same sRGB handling as obs_source_draw()
+	const bool linear_srgb = gs_get_linear_srgb();
+	const bool srgb_previous = gs_framebuffer_srgb_enabled();
+	gs_enable_framebuffer_srgb(linear_srgb);
+
+	// A missing avatar is bound to the other texture; its rectangle is empty, so nothing is drawn for it
+	gs_texture_t *bind_a = tex_old ? tex_old : any_tex;
+	gs_texture_t *bind_b = tex_new ? tex_new : any_tex;
+	if (linear_srgb) {
+		gs_effect_set_texture_srgb(p_a, bind_a);
+		gs_effect_set_texture_srgb(p_b, bind_b);
+	} else {
+		gs_effect_set_texture(p_a, bind_a);
+		gs_effect_set_texture(p_b, bind_b);
+	}
+	gs_effect_set_vec2(p_box, &box_px);
+	gs_effect_set_vec4(p_ra, &vec_a);
+	gs_effect_set_vec4(p_rb, &vec_b);
+	gs_effect_set_float(p_t, t);
+
+	gs_blend_state_push();
+	gs_reset_blend_state();
+	while (gs_effect_loop(effect, "Draw"))
+		gs_draw_sprite(any_tex, 0, ref_w, ref_h);
+	gs_blend_state_pop();
+
+	gs_enable_framebuffer_srgb(srgb_previous);
+}
 
 // Callback: Processes audio data to calculate volume levels (dB)
 static void audio_callback(void *data_ptr, obs_source_t *source, const struct audio_data *audio_data, bool muted)
@@ -401,15 +703,12 @@ static void flood_tuber_destroy(void *d)
 
 	flood_tuber_remove_audio_capture(data);
 	obs_enter_graphics();
-	data->image_idle.Free();
-	data->image_blink.Free();
-	data->image_action.Free();
-	data->image_talking_1.Free();
-	data->image_talking_2.Free();
-	data->image_talking_3.Free();
-	data->image_talking_1_blink.Free();
-	data->image_talking_2_blink.Free();
-	data->image_talking_3_blink.Free();
+		data->cur.Free();
+		data->prev.Free();
+		if (data->fade_effect) {
+			gs_effect_destroy(data->fade_effect);
+			data->fade_effect = NULL;
+		}
 	obs_leave_graphics();
 	obs_hotkey_unregister(data->hotkey_next);
 	obs_hotkey_unregister(data->hotkey_prev);
@@ -425,15 +724,34 @@ static void flood_tuber_update(void *data_ptr, obs_data_t *settings)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
 
-	update_image_setting(&data->image_idle, settings, "path_idle");
-	update_image_setting(&data->image_blink, settings, "path_blink");
-	update_image_setting(&data->image_action, settings, "path_action");
-	update_image_setting(&data->image_talking_1, settings, "path_talk_1");
-	update_image_setting(&data->image_talking_2, settings, "path_talk_2");
-	update_image_setting(&data->image_talking_3, settings, "path_talk_3");
-	update_image_setting(&data->image_talking_1_blink, settings, "path_talk_1_blink");
-	update_image_setting(&data->image_talking_2_blink, settings, "path_talk_2_blink");
-	update_image_setting(&data->image_talking_3_blink, settings, "path_talk_3_blink");
+	// -- Avatar crossfade --
+	const char *fade_easing = obs_data_get_string(settings, "avatar_fade_easing");
+	int fade_ms = (int)obs_data_get_int(settings, "avatar_fade_duration");
+	data->fade_enabled = obs_data_get_bool(settings, "avatar_fade_enabled");
+	data->fade_smooth = fade_easing && strcmp(fade_easing, "Smooth") == 0;
+	data->fade_duration = (float)(fade_ms < 0 ? 0 : (fade_ms > 5000 ? 5000 : fade_ms)) / 1000.0f;
+
+	// The avatar changed if one of its image paths changed (checked before the images are reloaded)
+	uint64_t avatar_hash = avatar_paths_hash(settings);
+	bool avatar_changed = data->avatar_ready && avatar_hash != data->avatar_hash;
+	data->avatar_hash = avatar_hash;
+	data->avatar_ready = true;
+
+	if (avatar_changed || (!data->fade_enabled && data->transition.active)) {
+		obs_enter_graphics();
+		begin_avatar_fade(data, avatar_changed && data->fade_enabled && data->fade_duration > 0.0f);
+		obs_leave_graphics();
+	}
+
+	update_image_setting(&data->cur.image_idle, settings, "path_idle");
+	update_image_setting(&data->cur.image_blink, settings, "path_blink");
+	update_image_setting(&data->cur.image_action, settings, "path_action");
+	update_image_setting(&data->cur.image_talking_1, settings, "path_talk_1");
+	update_image_setting(&data->cur.image_talking_2, settings, "path_talk_2");
+	update_image_setting(&data->cur.image_talking_3, settings, "path_talk_3");
+	update_image_setting(&data->cur.image_talking_1_blink, settings, "path_talk_1_blink");
+	update_image_setting(&data->cur.image_talking_2_blink, settings, "path_talk_2_blink");
+	update_image_setting(&data->cur.image_talking_3_blink, settings, "path_talk_3_blink");
 
 	data->threshold = (float)obs_data_get_double(settings, "threshold");
 	data->release_delay = (float)obs_data_get_int(settings, "release_delay") / 1000.0f; // ms to seconds
@@ -496,15 +814,11 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 
     obs_enter_graphics(); // Required for standard texture updates
 
-    flood_image_tick(&data->image_idle, elapsed_ns);
-	flood_image_tick(&data->image_blink, elapsed_ns);
-	flood_image_tick(&data->image_action, elapsed_ns);
-	flood_image_tick(&data->image_talking_1, elapsed_ns);
-	flood_image_tick(&data->image_talking_2, elapsed_ns);
-	flood_image_tick(&data->image_talking_3, elapsed_ns);
-	flood_image_tick(&data->image_talking_1_blink, elapsed_ns);
-	flood_image_tick(&data->image_talking_2_blink, elapsed_ns);
-	flood_image_tick(&data->image_talking_3_blink, elapsed_ns);
+	flood_avatar_tick(&data->cur, elapsed_ns);
+	if (data->transition.active) {
+		flood_avatar_tick(&data->prev, elapsed_ns);
+		update_avatar_transition(data, seconds);
+	}
 
     obs_leave_graphics();
 
@@ -551,7 +865,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 		}
 	}
 
-	if (flood_image_get_texture(&data->image_blink)) {
+	if (flood_image_get_texture(&data->cur.image_blink)) {
 		data->timer_blink += seconds;
 
 		if (!data->is_blinking_now && data->timer_blink >= data->time_until_next_blink) {
@@ -603,8 +917,8 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 static void flood_tuber_reference_size(struct flood_tuber_data *data, uint32_t *w, uint32_t *h)
 {
 	uint32_t ref_h = data->reference_height ? data->reference_height : 512;
-	uint32_t iw = flood_image_get_width(&data->image_idle);
-	uint32_t ih = flood_image_get_height(&data->image_idle);
+	uint32_t iw = flood_image_get_width(&data->cur.image_idle);
+	uint32_t ih = flood_image_get_height(&data->cur.image_idle);
 	float aspect = (iw && ih) ? (float)iw / (float)ih : 1.0f;
 
 	*h = ref_h;
@@ -612,89 +926,39 @@ static void flood_tuber_reference_size(struct flood_tuber_data *data, uint32_t *
 	if (*w < 1) *w = 1;
 }
 
-// Render: Selects and draws the correct texture based on current state (Talking, Idle, Blink, Action)
+// Render: draws the current avatar. While a fade runs, the outgoing and the new avatar are blended.
 static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
 	UNUSED_PARAMETER(effect);
-	gs_texture_t *tex = flood_image_get_texture(&data->image_idle);
 
-	if (data->current_state == AvatarState::ACTION && flood_image_get_texture(&data->image_action)) {
-		tex = flood_image_get_texture(&data->image_action);
-	}
-	else if (data->current_state == AvatarState::TALKING) {
-		bool blink = data->is_blinking_now;
+	gs_texture_t *tex = select_avatar_texture(data, &data->cur);
+	bool fading = data->transition.active && data->fade_effect != nullptr;
+	gs_texture_t *tex_old = fading ? select_avatar_texture(data, &data->prev) : nullptr;
 
-		int idx = data->talking_frame_index;
-		FloodImage *talk_img = nullptr;
-		FloodImage *talk_blink_img = nullptr;
+	if (!tex && !tex_old)
+		return;
 
-		// Select based on index
-		if (idx == 0) {
-			talk_img = &data->image_talking_1;
-			talk_blink_img = &data->image_talking_1_blink;
-		} else if (idx == 1) {
-			talk_img = &data->image_talking_2;
-			talk_blink_img = &data->image_talking_2_blink;
-		} else {
-			talk_img = &data->image_talking_3;
-			talk_blink_img = &data->image_talking_3_blink;
-		}
+	// Every frame is fitted in the same box (aspect kept, centered), so all images share
+	// the same height and width on screen, and the motion offsets stay identical.
+	uint32_t ref_w, ref_h;
+	flood_tuber_reference_size(data, &ref_w, &ref_h);
 
-		// Fallbacks
-		if (!flood_image_get_texture(talk_img) && idx == 2) {
-             talk_img = &data->image_talking_2;
-             talk_blink_img = &data->image_talking_2_blink;
-             idx = 1;
-        }
-		if (!flood_image_get_texture(talk_img) && idx == 1) {
-             talk_img = &data->image_talking_1;
-             talk_blink_img = &data->image_talking_1_blink;
-        }
-
-		// Determine final texture
-		if (blink && talk_blink_img && flood_image_get_texture(talk_blink_img)) {
-			tex = flood_image_get_texture(talk_blink_img);
-		} else if (talk_img && flood_image_get_texture(talk_img)) {
-			tex = flood_image_get_texture(talk_img);
-		}
-
-		// Final fallback for blinking if specific talk-blink is missing
-		if (blink && (!talk_blink_img || !flood_image_get_texture(talk_blink_img)) && flood_image_get_texture(&data->image_blink)) {
-			tex = flood_image_get_texture(&data->image_blink);
-		}
-	}
-	else {
-		if (data->is_blinking_now && flood_image_get_texture(&data->image_blink)) {
-			tex = flood_image_get_texture(&data->image_blink);
-		} else {
-			tex = flood_image_get_texture(&data->image_idle);
-		}
+	gs_matrix_push();
+	gs_matrix_translate3f(data->offset_x, data->offset_y, 0.0f);
+	if (data->mirror) {
+		gs_matrix_translate3f((float)ref_w, 0.0f, 0.0f);
+		gs_matrix_scale3f(-1.0f, 1.0f, 1.0f);
 	}
 
-	if (tex) {
-		// Chaque frame est ajustée dans la même boîte (proportions conservées, centrée) :
-		// toutes les images ont donc la même hauteur et la même largeur à l'écran.
-		uint32_t ref_w, ref_h;
-		flood_tuber_reference_size(data, &ref_w, &ref_h);
-
-		uint32_t tw = gs_texture_get_width(tex);
-		uint32_t th = gs_texture_get_height(tex);
-		float scale = (tw && th) ? fminf((float)ref_w / (float)tw, (float)ref_h / (float)th) : 1.0f;
-		int draw_w = (int)lroundf((float)tw * scale);
-		int draw_h = (int)lroundf((float)th * scale);
-		int x = ((int)ref_w - draw_w) / 2;
-		int y = ((int)ref_h - draw_h) / 2;
-
-		gs_matrix_push();
-		gs_matrix_translate3f(data->offset_x, data->offset_y, 0.0f);
-		if (data->mirror) {
-			gs_matrix_translate3f((float)ref_w, 0.0f, 0.0f);
-			gs_matrix_scale3f(-1.0f, 1.0f, 1.0f);
-		}
-		obs_source_draw(tex, x, y, (uint32_t)draw_w, (uint32_t)draw_h, false);
-		gs_matrix_pop();
+	if (fading) {
+		draw_avatar_crossfade(data, tex_old, tex, ref_w, ref_h);
+	} else if (tex) {
+		FloodFitRect r = fit_in_reference_box(tex, ref_w, ref_h);
+		obs_source_draw(tex, r.x, r.y, (uint32_t)r.w, (uint32_t)r.h, false);
 	}
+
+	gs_matrix_pop();
 }
 
 static uint32_t flood_tuber_get_width(void *data_ptr)

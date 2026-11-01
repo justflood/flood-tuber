@@ -86,6 +86,40 @@ struct FloodImage {
     }
 };
 
+// All images of one avatar, one per animation state
+struct AvatarImages {
+	FloodImage image_idle;
+	FloodImage image_blink;
+	FloodImage image_action;
+	FloodImage image_talking_1;
+	FloodImage image_talking_2;
+	FloodImage image_talking_3;
+
+	// Variants for blinking while talking
+	FloodImage image_talking_1_blink;
+	FloodImage image_talking_2_blink;
+	FloodImage image_talking_3_blink;
+
+	void Free() {
+		image_idle.Free();
+		image_blink.Free();
+		image_action.Free();
+		image_talking_1.Free();
+		image_talking_2.Free();
+		image_talking_3.Free();
+		image_talking_1_blink.Free();
+		image_talking_2_blink.Free();
+		image_talking_3_blink.Free();
+	}
+};
+
+// State of the crossfade between the outgoing avatar (prev) and the displayed one (cur)
+struct AvatarTransition {
+	bool active;    // True while the fade is running
+	float elapsed;  // Seconds since the fade started
+	float duration; // Total fade duration, in seconds
+};
+
 #define FLOOD_SLOT_COUNT 10
 
 struct flood_tuber_data;
@@ -107,18 +141,10 @@ struct flood_tuber_data {
     char audio_source_name[256];
     uint64_t capture_check_time;
 
-	// -- Image Assets (Using Wrapper) --
-	FloodImage image_idle;
-	FloodImage image_blink;
-	FloodImage image_action;
-	FloodImage image_talking_1;
-	FloodImage image_talking_2;
-	FloodImage image_talking_3;
-
-	// Variants for blinking while talking
-	FloodImage image_talking_1_blink;
-	FloodImage image_talking_2_blink;
-	FloodImage image_talking_3_blink;
+	// -- Avatar images --
+	AvatarImages cur;             // Avatar being displayed
+	AvatarImages prev;            // Outgoing avatar, kept alive during a fade
+	AvatarTransition transition;  // Fade state
 
 	// -- User Configuration --
 	float threshold;           // Audio dB threshold to trigger talking state
@@ -156,4 +182,13 @@ struct flood_tuber_data {
 	float offset_x;            // Calculated X offset for rendering
 	float offset_y;            // Calculated Y offset for rendering
 		uint32_t reference_height; // Common display height (px); offsets are a % of it
+
+		// -- Avatar crossfade --
+		bool fade_enabled;         // Fade option (avatar_fade_enabled)
+		bool fade_smooth;          // true: smooth curve, false: linear
+		float fade_duration;       // Fade length in seconds
+		bool fade_effect_failed;   // Shader could not be created: do not retry
+		gs_effect_t *fade_effect;  // Shader that blends the two avatars
+		bool avatar_ready;         // True once the first avatar has been loaded
+		uint64_t avatar_hash;      // Hash of the image paths: detects an avatar change
 };
