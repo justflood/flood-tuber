@@ -19,7 +19,7 @@
 static bool check_file_signature(const char *path) {
     if (!path || !*path) return false;
 
-    FILE *f = fopen(path, "rb");
+    FILE *f = os_fopen(path, "rb");
     if (!f) return false;
 
     unsigned char sig[12] = {0};
@@ -232,10 +232,9 @@ static void audio_callback(void *data_ptr, obs_source_t *source, const struct au
 
 
 
-// Plugin Init: Allocates memory and initializes the plugin state
-// ── Raccourcis : changement d'avatar ─────────────────────────────────────
+// ── Hotkeys: Avatar Switching ─────────────────────────────────────────────
 
-// Copie les réglages audio d'un jeu de settings vers un autre
+// Copies audio settings from one obs_data_t object to another
 static void copy_audio_keys(obs_data_t *from, obs_data_t *to)
 {
 	obs_data_set_string(to, "audio_source",  obs_data_get_string(from, "audio_source"));
@@ -244,8 +243,8 @@ static void copy_audio_keys(obs_data_t *from, obs_data_t *to)
 	obs_data_set_double(to, "talking_speed", obs_data_get_double(from, "talking_speed"));
 }
 
-// Chemin unique de changement d'avatar : bouton Charger, cycle, emplacements.
-// Si le dossier de l'avatar est introuvable, rien n'est modifié.
+// Shared avatar switch path used by Load button, Next/Prev cycle, and Slots.
+// If the avatar folder cannot be found, nothing is modified.
 bool switch_to_avatar(struct flood_tuber_data *tuber, const char *name)
 {
 	obs_data_t *settings = obs_source_get_settings(tuber->source);
@@ -253,7 +252,7 @@ bool switch_to_avatar(struct flood_tuber_data *tuber, const char *name)
 	copy_audio_keys(settings, audio);
 
 	if (!apply_avatar_to_settings(settings, name, false)) {
-		BLOG(LOG_WARNING, "Avatar introuvable, changement annulé : %s", name);
+		BLOG(LOG_WARNING, "Avatar not found, switch cancelled: %s", name);
 		obs_data_release(audio);
 		obs_data_release(settings);
 		return false;
@@ -269,7 +268,7 @@ bool switch_to_avatar(struct flood_tuber_data *tuber, const char *name)
 	return true;
 }
 
-// Avatar suivant (+1) ou précédent (-1), dans l'ordre de la liste
+// Next (+1) or previous (-1) avatar in list order
 static void switch_by_offset(struct flood_tuber_data *tuber, int offset)
 {
 	obs_data_t *settings = obs_source_get_settings(tuber->source);
@@ -288,7 +287,7 @@ static void switch_by_offset(struct flood_tuber_data *tuber, int offset)
 	switch_to_avatar(tuber, names[((idx + offset) % n + n) % n].c_str());
 }
 
-// Emplacement 1..10 : lit slot_N puis bascule. Emplacement vide = rien.
+// Slot 1..10: reads slot_N and switches to that avatar. Empty slot = no-op.
 static void switch_to_slot(struct flood_tuber_data *tuber, int index)
 {
 	char key[16];
@@ -318,6 +317,7 @@ static void on_hotkey_slot(void *data, obs_hotkey_id, obs_hotkey_t *, bool press
 	if (pressed) switch_to_slot(hk->tuber, hk->index);
 }
 
+// Plugin Init: Allocates memory and initializes the plugin state
 static void *flood_tuber_create(obs_data_t *settings, obs_source_t *source)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)bzalloc(sizeof(struct flood_tuber_data));
@@ -327,7 +327,7 @@ static void *flood_tuber_create(obs_data_t *settings, obs_source_t *source)
 	data->talking_frame_index = 0;
 	data->timer_release_hold = 0.0f;
 
-	// Raccourcis : suivant, précédent, puis emplacements 1..10
+	// Register hotkeys: next, previous, and slots 1..10
 	data->hotkey_next = obs_hotkey_register_source(source, "flood_tuber.avatar_next",
 		obs_module_text("hotkey_avatar_next"), on_hotkey_next, data);
 	data->hotkey_prev = obs_hotkey_register_source(source, "flood_tuber.avatar_prev",
@@ -460,6 +460,7 @@ static void flood_tuber_update(void *data_ptr, obs_data_t *settings)
 	data->effect_speed = (float)obs_data_get_int(settings, "motion_speed") / 100.0f;
 	data->effect_strength = (float)obs_data_get_int(settings, "motion_strength");
 	data->mirror = obs_data_get_bool(settings, "mirror");
+	data->use_reference_height = obs_data_get_bool(settings, "use_reference_height");
 	data->reference_height = (uint32_t)obs_data_get_int(settings, "reference_height");
 	if (data->reference_height < 16) data->reference_height = 512;
 	data->talk_interval = (float)obs_data_get_double(settings, "talking_speed");
@@ -572,34 +573,45 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 		data->timer_blink = 0.0f;
 	}
 
-	data->offset_x = 0.0f;
-	data->offset_y = 0.0f;
+	float target_x = 0.0f;
+	float target_y = 0.0f;
 
 	if (data->current_state == AvatarState::TALKING && data->talk_effect != TalkingEffect::NONE) {
 		data->timer_effect += seconds * data->effect_speed;
 
-		// Amplitude en % de la hauteur de référence : indépendante de la résolution des PNG
-		float amp = data->effect_strength * 0.01f * (float)data->reference_height;
+		// Classic mode (default): effect_strength in pixels (100% compatible with v1.2.0 and older).
+		// Fixed reference height mode: scale proportionally to reference_height.
+		float amp = data->use_reference_height
+			? (data->effect_strength * ((float)data->reference_height / 512.0f))
+			: data->effect_strength;
 
 		if (data->talk_effect == TalkingEffect::BOUNCE) {
-			data->offset_y = -fabsf(sinf(data->timer_effect * 5.0f)) * amp;
+			target_y = -fabsf(sinf(data->timer_effect * 5.0f)) * amp;
 		}
 		else if (data->talk_effect == TalkingEffect::SHAKE) {
-			data->offset_x = sinf(data->timer_effect * 25.0f) * amp * 0.8f;
-			data->offset_y = cosf(data->timer_effect * 20.0f) * amp * 0.8f;
+			target_x = sinf(data->timer_effect * 25.0f) * amp * 0.8f;
+			target_y = cosf(data->timer_effect * 20.0f) * amp * 0.8f;
 		}
 		else if (data->talk_effect == TalkingEffect::OSCILLATING) {
-			// Dérive douce en huit : x suit une sinusoïde, y une sinusoïde deux fois plus rapide
-			data->offset_x = sinf(data->timer_effect * 3.0f) * amp;
-			data->offset_y = sinf(data->timer_effect * 6.0f) * amp * 0.5f;
+			// Smooth figure-eight drift: x follows a sine wave, y follows a sine wave at double frequency
+			target_x = sinf(data->timer_effect * 3.0f) * amp;
+			target_y = sinf(data->timer_effect * 6.0f) * amp * 0.5f;
 		}
 	} else {
 		data->timer_effect = 0.0f;
 	}
+
+	// Smooth easing / interpolation between Talking and Idle states (Issue #5)
+	float blend = 1.0f - expf(-18.0f * seconds);
+	if (blend > 1.0f) blend = 1.0f;
+	data->offset_x += (target_x - data->offset_x) * blend;
+	data->offset_y += (target_y - data->offset_y) * blend;
+	if (fabsf(data->offset_x - target_x) < 0.05f) data->offset_x = target_x;
+	if (fabsf(data->offset_y - target_y) < 0.05f) data->offset_y = target_y;
 }
 
-// Boîte commune d'affichage : hauteur réglée par l'utilisateur, largeur selon le ratio
-// de l'image au repos. Seul le ratio compte, jamais la taille en pixels.
+// Common display box when use_reference_height is enabled: user-configured height,
+// width computed from the idle image's aspect ratio.
 static void flood_tuber_reference_size(struct flood_tuber_data *data, uint32_t *w, uint32_t *h)
 {
 	uint32_t ref_h = data->reference_height ? data->reference_height : 512;
@@ -673,43 +685,61 @@ static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 	}
 
 	if (tex) {
-		// Chaque frame est ajustée dans la même boîte (proportions conservées, centrée) :
-		// toutes les images ont donc la même hauteur et la même largeur à l'écran.
-		uint32_t ref_w, ref_h;
-		flood_tuber_reference_size(data, &ref_w, &ref_h);
+		if (data->use_reference_height) {
+			// Fit each frame inside the normalized reference box (aspect preserved, centered)
+			uint32_t ref_w, ref_h;
+			flood_tuber_reference_size(data, &ref_w, &ref_h);
 
-		uint32_t tw = gs_texture_get_width(tex);
-		uint32_t th = gs_texture_get_height(tex);
-		float scale = (tw && th) ? fminf((float)ref_w / (float)tw, (float)ref_h / (float)th) : 1.0f;
-		int draw_w = (int)lroundf((float)tw * scale);
-		int draw_h = (int)lroundf((float)th * scale);
-		int x = ((int)ref_w - draw_w) / 2;
-		int y = ((int)ref_h - draw_h) / 2;
+			uint32_t tw = gs_texture_get_width(tex);
+			uint32_t th = gs_texture_get_height(tex);
+			float scale = (tw && th) ? fminf((float)ref_w / (float)tw, (float)ref_h / (float)th) : 1.0f;
+			int draw_w = (int)lroundf((float)tw * scale);
+			int draw_h = (int)lroundf((float)th * scale);
+			int x = ((int)ref_w - draw_w) / 2;
+			int y = ((int)ref_h - draw_h) / 2;
 
-		gs_matrix_push();
-		gs_matrix_translate3f(data->offset_x, data->offset_y, 0.0f);
-		if (data->mirror) {
-			gs_matrix_translate3f((float)ref_w, 0.0f, 0.0f);
-			gs_matrix_scale3f(-1.0f, 1.0f, 1.0f);
+			gs_matrix_push();
+			gs_matrix_translate3f(data->offset_x, data->offset_y, 0.0f);
+			if (data->mirror) {
+				gs_matrix_translate3f((float)ref_w, 0.0f, 0.0f);
+				gs_matrix_scale3f(-1.0f, 1.0f, 1.0f);
+			}
+			obs_source_draw(tex, x, y, (uint32_t)draw_w, (uint32_t)draw_h, false);
+			gs_matrix_pop();
+		} else {
+			// Classic mode (default): draw at native texture resolution
+			gs_matrix_push();
+			gs_matrix_translate3f(data->offset_x, data->offset_y, 0.0f);
+			if (data->mirror) {
+				uint32_t width = gs_texture_get_width(tex);
+				gs_matrix_translate3f((float)width, 0.0f, 0.0f);
+				gs_matrix_scale3f(-1.0f, 1.0f, 1.0f);
+			}
+			obs_source_draw(tex, 0, 0, 0, 0, false);
+			gs_matrix_pop();
 		}
-		obs_source_draw(tex, x, y, (uint32_t)draw_w, (uint32_t)draw_h, false);
-		gs_matrix_pop();
 	}
 }
 
 static uint32_t flood_tuber_get_width(void *data_ptr)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
-	uint32_t w, h;
-	flood_tuber_reference_size(data, &w, &h);
-	return w;
+	if (data->use_reference_height) {
+		uint32_t w, h;
+		flood_tuber_reference_size(data, &w, &h);
+		return w;
+	}
+	return flood_image_get_width(&data->image_idle);
 }
 static uint32_t flood_tuber_get_height(void *data_ptr)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
-	uint32_t w, h;
-	flood_tuber_reference_size(data, &w, &h);
-	return h;
+	if (data->use_reference_height) {
+		uint32_t w, h;
+		flood_tuber_reference_size(data, &w, &h);
+		return h;
+	}
+	return flood_image_get_height(&data->image_idle);
 }
 static const char *flood_tuber_get_name(void *unused)
 {

@@ -1,7 +1,6 @@
 #include "apng-decoder.h"
 #include <util/platform.h>
 #include <obs-module.h>
-#include <fstream>
 
 #define BLOG(level, format, ...) blog(level, "[APNG-Decoder] " format, ##__VA_ARGS__)
 
@@ -43,20 +42,35 @@ void APNGDecoder::Free() {
 bool APNGDecoder::Load(const char* path) {
     Free();
 
-    std::vector<unsigned char> file_data;
-    unsigned error = lodepng::load_file(file_data, path);
-    if (error) {
-        BLOG(LOG_WARNING, "Failed to load file %s: %s", path, lodepng_error_text(error));
+    if (!path || !*path) return false;
+
+    FILE* f = os_fopen(path, "rb");
+    if (!f) {
+        BLOG(LOG_WARNING, "Failed to open file: %s", path);
+        return false;
+    }
+
+    int64_t size = os_fgetsize(f);
+    if (size <= 0) {
+        fclose(f);
+        return false;
+    }
+
+    std::vector<unsigned char> file_data((size_t)size);
+    size_t read_bytes = fread(file_data.data(), 1, (size_t)size, f);
+    fclose(f);
+    if (read_bytes != (size_t)size) {
+        BLOG(LOG_WARNING, "Failed to read file: %s", path);
         return false;
     }
 
     if (!ParseChunks(file_data)) {
         // Fallback: Try loading as standard static PNG
         BLOG(LOG_INFO, "Not an APNG, loading as static PNG: %s", path);
-        
+
         std::vector<unsigned char> image;
         unsigned w, h;
-        error = lodepng::decode(image, w, h, file_data);
+        unsigned error = lodepng::decode(image, w, h, file_data);
         if (error) return false;
 
         width = w;
@@ -64,12 +78,12 @@ bool APNGDecoder::Load(const char* path) {
 
         APNGFrame frame;
         frame.delay_ms = 1000;
-        
+
         obs_enter_graphics();
         const uint8_t* data_ptr = image.data();
         frame.texture = gs_texture_create(w, h, GS_RGBA, 1, &data_ptr, GS_DYNAMIC);
         obs_leave_graphics();
-        
+
         if (frame.texture) {
              gs_texture_set_image(frame.texture, image.data(), w * 4, false); // safety
              frames.push_back(frame);
@@ -83,7 +97,7 @@ bool APNGDecoder::Load(const char* path) {
 
 bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
     if (source.size() < 29) return false; // Too small
-    
+
     // Check Signature
     if (source[0] != 137 || source[1] != 80 || source[2] != 78) return false;
 
@@ -102,7 +116,7 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
     while (pos < source.size()) {
         if (pos + 8 > source.size()) break;
         uint32_t len = read_u32(&source[pos]);
-        
+
         const unsigned char* chunk_data = &source[pos + 8];
         uint32_t type = read_u32(&source[pos + 4]);
 
@@ -134,10 +148,10 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
             current_info.delay_den = read_u16(chunk_data + 22);
             current_info.dispose_op = chunk_data[24];
             current_info.blend_op = chunk_data[25];
-            
-            BLOG(LOG_DEBUG, "fcTL Frame: %ux%u, Pos(%u,%u), Delay(%u/%u), Seq:%u", 
-                current_info.width, current_info.height, 
-                current_info.x_offset, current_info.y_offset, 
+
+            BLOG(LOG_DEBUG, "fcTL Frame: %ux%u, Pos(%u,%u), Delay(%u/%u), Seq:%u",
+                current_info.width, current_info.height,
+                current_info.x_offset, current_info.y_offset,
                 current_info.delay_num, current_info.delay_den, current_info.seq);
         }
         else if (type == 0x66644154) { // fdAT
@@ -164,12 +178,12 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
 
         pos += 8 + len + 4; // Length + Type + Data + CRC
     }
-    
+
     if (!is_apng) return false;
 
     // Now decode all collected frames
     std::vector<unsigned char> canvas(width * height * 4, 0);       // Current full canvas
-    
+
     total_duration_ms = 0;
 
     obs_enter_graphics();
@@ -180,36 +194,36 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
         // Signature
         const unsigned char sig[] = {137, 80, 78, 71, 13, 10, 26, 10};
         png_data.insert(png_data.end(), sig, sig + 8);
-        
+
         // IHDR
         if (source.size() >= 33) {
             std::vector<unsigned char> ihdr_body(13);
             memcpy(ihdr_body.data(), &source[16], 13); // Copy IHDR body from original
-            
+
             // Set W, H for this frame
             set_u32_be(ihdr_body.data() + 0, info.width);
             set_u32_be(ihdr_body.data() + 4, info.height);
-            
+
             // Create chunk
             unsigned char header[8];
             set_u32_be(header, 13);
             header[4] = 'I'; header[5] = 'H'; header[6] = 'D'; header[7] = 'R';
             png_data.insert(png_data.end(), header, header + 8);
             png_data.insert(png_data.end(), ihdr_body.begin(), ihdr_body.end());
-            
+
             // CRC
             std::vector<unsigned char> check_buf;
             check_buf.push_back('I'); check_buf.push_back('H'); check_buf.push_back('D'); check_buf.push_back('R');
             check_buf.insert(check_buf.end(), ihdr_body.begin(), ihdr_body.end());
             unsigned crc = lodepng_crc32(check_buf.data(), check_buf.size());
-            
+
             unsigned char crc_b[4]; set_u32_be(crc_b, crc);
             png_data.insert(png_data.end(), crc_b, crc_b + 4);
         }
 
         // Insert Common Chunks (PLTE, tRNS, gAMA...)
         png_data.insert(png_data.end(), common_chunks.begin(), common_chunks.end());
-        
+
         // IDAT (Joined data)
         if (!info.compressed_data.empty()) {
              unsigned char header[8];
@@ -217,7 +231,7 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
              header[4] = 'I'; header[5] = 'D'; header[6] = 'A'; header[7] = 'T';
              png_data.insert(png_data.end(), header, header + 8);
              png_data.insert(png_data.end(), info.compressed_data.begin(), info.compressed_data.end());
-             
+
              // CRC
              std::vector<unsigned char> check_buf;
              check_buf.push_back('I'); check_buf.push_back('D'); check_buf.push_back('A'); check_buf.push_back('T');
@@ -236,13 +250,13 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
         std::vector<unsigned char> frame_raw;
         unsigned fw, fh;
         unsigned error = lodepng::decode(frame_raw, fw, fh, png_data);
-        
+
         if (error) {
              BLOG(LOG_WARNING, "LodePNG Decode Error: %u %s", error, lodepng_error_text(error));
         }
 
         if (!error && fw == info.width && fh == info.height) {
-            
+
             // 1. Snapshot for DISPOSE_PREVIOUS
             std::vector<unsigned char> before_draw;
             if (info.dispose_op == 2) { // APNG_DISPOSE_OP_PREVIOUS
@@ -315,7 +329,7 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
             }
         }
     }
-    
+
     obs_leave_graphics();
     return true;
 }
@@ -323,10 +337,10 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
 gs_texture_t* APNGDecoder::GetTextureForTime(uint64_t time_ms) {
     if (frames.empty()) return nullptr;
     if (frames.size() == 1) return frames[0].texture;
-    
+
     uint64_t t = time_ms % total_duration_ms;
     uint64_t current_t = 0;
-    
+
     for (const auto& f : frames) {
         if (t < current_t + f.delay_ms) {
             return f.texture;

@@ -45,7 +45,7 @@ enum class TalkingEffect {
 	NONE,
 	BOUNCE,     // Vertical jumping motion
 	SHAKE,      // Random jitter/vibration
-	OSCILLATING      // Smooth figure-eight drift
+	OSCILLATING // Smooth figure-eight drift
 };
 
 // Wrapper for different image types (OBS standard or Custom)
@@ -53,7 +53,7 @@ struct FloodImage {
     enum Type {
         OBS_STANDARD, // Uses flood_image_file_t (GIF, JPEG, PNG, etc.)
         CUSTOM_WEBP,  // Uses WebPDecoder
-        CUSTOM_APNG   // Uses APNGDecoder (Future)
+        CUSTOM_APNG   // Uses APNGDecoder
     } type;
 
     // Standard OBS loader
@@ -90,7 +90,7 @@ struct FloodImage {
 
 struct flood_tuber_data;
 
-// Raccourci « emplacement » : retient son instance et son index (1..10)
+// Slot hotkey: stores its plugin instance and slot index (1..10)
 struct flood_slot_hotkey {
 	struct flood_tuber_data *tuber;
 	int index;
@@ -99,13 +99,13 @@ struct flood_slot_hotkey {
 
 struct flood_tuber_data {
 	obs_source_t *source;             // The OBS source instance for this plugin
-    obs_weak_source_t *audio_source; // Mic source, resolved by name after startup
-    // -- Hotkey --
-   	obs_hotkey_id hotkey_next;   // Avatar Next
-	obs_hotkey_id hotkey_prev;   // Avatar Prev
+	obs_weak_source_t *audio_source;  // Mic source, resolved by name after startup
+	// -- Hotkeys --
+	obs_hotkey_id hotkey_next;        // Avatar Next
+	obs_hotkey_id hotkey_prev;        // Avatar Prev
 	struct flood_slot_hotkey slot_hotkeys[FLOOD_SLOT_COUNT];
-    char audio_source_name[256];
-    uint64_t capture_check_time;
+	char audio_source_name[256];
+	uint64_t capture_check_time;
 
 	// -- Image Assets (Using Wrapper) --
 	FloodImage image_idle;
@@ -149,11 +149,12 @@ struct flood_tuber_data {
 	// -- Motion Effects --
 	TalkingEffect talk_effect;
 	bool mirror;
-	float talk_interval;    // Time in seconds between talking frames (default 0.10f)
+	float talk_interval;       // Time in seconds between talking frames (default 0.10f)
 	float effect_speed;
 	float effect_strength;
 	float timer_effect;        // Continuous timer for sin/cos motion calculations
 	float offset_x;            // Calculated X offset for rendering
 	float offset_y;            // Calculated Y offset for rendering
-		uint32_t reference_height; // Common display height (px); offsets are a % of it
+	bool use_reference_height; // Optional fixed display height mode for hotkey switching
+	uint32_t reference_height; // Common display height (px) when use_reference_height is enabled
 };
