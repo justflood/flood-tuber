@@ -1,0 +1,24 @@
+# Maintainer: Firstof9 <https://github.com/firstof9>
+pkgname=obs-plugin-flood-tuber
+pkgver=1.2.0
+pkgrel=1
+pkgdesc="PNGTuber plugin for OBS Studio with audio threshold and animated image support"
+arch=('x86_64' 'aarch64')
+url="https://github.com/justflood/flood-tuber"
+license=('GPL-2.0-or-later')
+depends=('obs-studio' 'libwebp')
+makedepends=('cmake' 'ninja' 'git')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cmake -B build -S "flood-tuber-$pkgver" \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build build
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}
