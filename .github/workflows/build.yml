@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -52,7 +52,7 @@ jobs:
           cd dist && tar -czvf ../flood-tuber-linux.tar.gz flood-tuber
 
       - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: flood-tuber-linux
           path: flood-tuber-linux.tar.gz
@@ -66,7 +66,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 0
@@ -85,7 +85,7 @@ jobs:
           package: true
 
       - name: Upload Windows Artifacts 📡
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: flood-tuber-windows
           path: |
@@ -101,7 +101,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 0
@@ -129,7 +129,7 @@ jobs:
           notarize: false
 
       - name: Upload macOS Artifacts 📡
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: flood-tuber-macos-universal
           path: ${{ github.workspace }}/release/flood-tuber-*-macos-universal.*
