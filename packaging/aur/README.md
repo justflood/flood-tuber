@@ -11,20 +11,24 @@ This directory contains `PKGBUILD` definitions for Arch Linux, CachyOS, and othe
 
 On Arch Linux or CachyOS:
 
-1. Clone or copy `PKGBUILD`:
-   ```bash
-   cd packaging/aur
-   ```
+### Option A: Using `PKGBUILD` (tagged release)
 
-2. Generate updated checksums (for release PKGBUILD):
-   ```bash
-   updpkgsums
-   ```
-
-3. Build and install:
+1. Put `PKGBUILD` in a directory:
    ```bash
    makepkg -si
    ```
+
+### Option B: Using `PKGBUILD-git` (latest git build)
+
+1. Rename `PKGBUILD-git` to `PKGBUILD` in a clean directory:
+   ```bash
+   cp PKGBUILD-git PKGBUILD
+   ```
+2. Build and install:
+   ```bash
+   makepkg -si
+   ```
+   *(The `-s` flag automatically installs dependencies using pacman/cachyos repos, and `-i` installs the compiled package).*
 
 ## Publishing to the AUR
 
@@ -52,3 +56,4 @@ To publish on https://aur.archlinux.org:
    git commit -m "Initial release v1.2.0"
    git push origin master
    ```
+
