@@ -7,7 +7,7 @@ arch=('x86_64' 'aarch64')
 url="https://github.com/justflood/flood-tuber"
 license=('GPL-2.0-or-later')
 depends=('obs-studio' 'libwebp')
-makedepends=('cmake' 'ninja' 'git')
+makedepends=('cmake' 'ninja' 'git' 'simde')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 

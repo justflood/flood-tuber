@@ -57,6 +57,56 @@ jobs:
           name: flood-tuber-linux
           path: flood-tuber-linux.tar.gz
 
+  build-arch:
+    name: Build Arch / CachyOS 🏹
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            base-devel \
+            cmake \
+            ninja \
+            git \
+            obs-studio \
+            simde \
+            libwebp
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mark workspace safe for git
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: |
+          cmake --build build
+
+      - name: Package for Arch
+        run: |
+          mkdir -p pkg
+          DESTDIR=pkg cmake --install build
+          cd pkg
+          tar --zstd -cvf ../flood-tuber-arch-x86_64.pkg.tar.zst *
+
+      - name: Upload Arch / CachyOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flood-tuber-arch-x86_64
+          path: flood-tuber-arch-x86_64.pkg.tar.zst
+
   build-windows:
     name: Build Windows 🪟
     runs-on: windows-2022
