@@ -46,11 +46,38 @@ I offer two installation methods:
     > *   Click **"Run Anyway"**
 3.  Follow the setup wizard instructions. The installer automatically installs the plugin to the standard OBS plugin directory (`C:\ProgramData\obs-studio\plugins\flood-tuber`) and cleans up any legacy files from `C:\Program Files\obs-studio`.
 
-### Option 2: Portable (Manual)
+### Option 2: Portable (Manual - Windows)
 1.  Download `FloodTuber-Portable-v1.2.0.zip`.
 2.  Extract the `flood-tuber` folder from the archive directly into `C:\ProgramData\obs-studio\plugins\` (so that `C:\ProgramData\obs-studio\plugins\flood-tuber\flood-tuber.dll` and `C:\ProgramData\obs-studio\plugins\flood-tuber\data` exist).
 3.  *(If upgrading manually from v1.1.0 or older)* Delete the old `C:\Program Files\obs-studio\obs-plugins\64bit\flood-tuber.dll` and `C:\Program Files\obs-studio\data\obs-plugins\flood-tuber` folder so OBS does not load the outdated version.
 4.  Restart OBS Studio.
+
+### Option 3: Linux (Build & Install)
+1. Install dependencies (Ubuntu/Debian example):
+   ```bash
+   sudo apt install build-essential cmake libobs-dev libwebp-dev
+   ```
+2. Build the plugin:
+   ```bash
+   cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+   cmake --build build -j$(nproc)
+   ```
+3. Install to your OBS plugin directory:
+   * **Native / System OBS:**
+     ```bash
+     mkdir -p ~/.config/obs-studio/plugins/flood-tuber/bin/64bit
+     mkdir -p ~/.config/obs-studio/plugins/flood-tuber/data
+     cp build/flood-tuber.so ~/.config/obs-studio/plugins/flood-tuber/bin/64bit/
+     cp -r data/* ~/.config/obs-studio/plugins/flood-tuber/data/
+     ```
+   * **Flatpak OBS:**
+     ```bash
+     mkdir -p ~/.var/app/com.obsproject.Studio/config/obs-studio/plugins/flood-tuber/bin/64bit
+     mkdir -p ~/.var/app/com.obsproject.Studio/config/obs-studio/plugins/flood-tuber/data
+     cp build/flood-tuber.so ~/.var/app/com.obsproject.Studio/config/obs-studio/plugins/flood-tuber/bin/64bit/
+     cp -r data/* ~/.var/app/com.obsproject.Studio/config/obs-studio/plugins/flood-tuber/data/
+     ```
+4. Restart OBS Studio.
 
 ## Usage
 

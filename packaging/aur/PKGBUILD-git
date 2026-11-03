@@ -1,0 +1,32 @@
+# Maintainer: Firstof9 <https://github.com/firstof9>
+pkgname=obs-plugin-flood-tuber-git
+pkgver=1.2.0.r0.g0000000
+pkgrel=1
+pkgdesc="PNGTuber plugin for OBS Studio with audio threshold and animated image support (VCS package)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/justflood/flood-tuber"
+license=('GPL-2.0-or-later')
+depends=('obs-studio' 'libwebp')
+makedepends=('cmake' 'ninja' 'git' 'simde')
+provides=('obs-plugin-flood-tuber')
+conflicts=('obs-plugin-flood-tuber')
+source=("git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "flood-tuber"
+  git describe --long --tags --abbrev=7 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+  cmake -B build -S "flood-tuber" \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build build
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}

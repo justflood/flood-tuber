@@ -8,7 +8,35 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
+#else
+#include <spawn.h>
+#include <unistd.h>
+#include <sys/wait.h>
+extern char **environ;
 #endif
+
+// Portable helper to open folders or URLs in the OS default handler
+static void os_open_url_or_path(const char *target)
+{
+	if (!target || !*target) return;
+#if defined(_WIN32)
+	ShellExecuteA(NULL, "open", target, NULL, NULL, SW_SHOWNORMAL);
+#elif defined(__APPLE__)
+	pid_t pid;
+	char *argv[] = {(char *)"open", (char *)target, NULL};
+	if (posix_spawnp(&pid, "open", NULL, NULL, argv, environ) == 0) {
+		int status;
+		waitpid(pid, &status, WNOHANG);
+	}
+#else
+	pid_t pid;
+	char *argv[] = {(char *)"xdg-open", (char *)target, NULL};
+	if (posix_spawnp(&pid, "xdg-open", NULL, NULL, argv, environ) == 0) {
+		int status;
+		waitpid(pid, &status, WNOHANG);
+	}
+#endif
+}
 
 // Returns the custom avatars folder path from source settings.
 // Returns NULL if not set. Do NOT free the returned pointer.
@@ -451,7 +479,7 @@ static bool save_as_new_avatar(obs_properties_t *props, obs_property_t *p, void 
 	return true;
 }
 
-// Opens the custom avatars folder in Windows Explorer
+// Opens the custom avatars folder in OS default file manager
 static bool open_library_folder(obs_properties_t *props, obs_property_t *p, void *data)
 {
 	(void)props; (void)p;
@@ -464,17 +492,13 @@ static bool open_library_folder(obs_properties_t *props, obs_property_t *p, void
 	const char *custom = get_custom_dir(settings);
 	if (custom) {
 		BLOG(LOG_INFO, "open_folder: opening %s", custom);
-#ifdef _WIN32
-		ShellExecuteA(NULL, "open", custom, NULL, NULL, SW_SHOWDEFAULT);
-#endif
+		os_open_url_or_path(custom);
 	} else {
 		// No custom folder set — open built-in avatars dir
 		char *data_dir = obs_module_file("avatars");
 		if (data_dir) {
 			BLOG(LOG_INFO, "open_folder: no custom dir, opening built-in: %s", data_dir);
-#ifdef _WIN32
-			ShellExecuteA(NULL, "open", data_dir, NULL, NULL, SW_SHOWDEFAULT);
-#endif
+			os_open_url_or_path(data_dir);
 			bfree(data_dir);
 		}
 	}
@@ -517,10 +541,7 @@ static void add_file_prop(obs_properties_t *props, const char *name, const char 
 static bool open_github_page(obs_properties_t *props, obs_property_t *p, void *data)
 {
 	(void)props; (void)p; (void)data;
-#ifdef _WIN32
-	ShellExecuteA(NULL, "open", "https://github.com/justflood/flood-tuber",
-	              NULL, NULL, SW_SHOWNORMAL);
-#endif
+	os_open_url_or_path("https://github.com/justflood/flood-tuber");
 	return false;
 }
 
@@ -528,10 +549,7 @@ static bool open_github_page(obs_properties_t *props, obs_property_t *p, void *d
 static bool open_website_page(obs_properties_t *props, obs_property_t *p, void *data)
 {
 	(void)props; (void)p; (void)data;
-#ifdef _WIN32
-	ShellExecuteA(NULL, "open", "https://floodtechlab.com/floodtuber/",
-	              NULL, NULL, SW_SHOWNORMAL);
-#endif
+	os_open_url_or_path("https://floodtechlab.com/floodtuber/");
 	return false;
 }
 
