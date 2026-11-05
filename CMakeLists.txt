@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.22...3.30)
 
+# Re-run CMake when the version changes, so the DLL always carries the buildspec version
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/buildspec.json")
+
+# Optional pre-release suffix (e.g. "beta2"). CMake versions must stay numeric, so the suffix
+# is only added to FLOOD_TUBER_VERSION, which is what the plugin shows in its log.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/buildspec.json" _buildspec_all)
+string(JSON _prerelease ERROR_VARIABLE _prerelease_err GET "${_buildspec_all}" prerelease)
+
 if(COMMAND set_target_properties_obs)
     # In-tree build inside obs-studio/plugins/flood-tuber
     file(READ "${CMAKE_CURRENT_SOURCE_DIR}/buildspec.json" _buildspec)
@@ -26,8 +34,13 @@ else()
 endif()
 
 # Version passed to C++ code via compile define (single source of truth)
+set(_flood_version "${PROJECT_VERSION}")
+if(_prerelease)
+    set(_flood_version "${PROJECT_VERSION}-${_prerelease}")
+endif()
+
 target_compile_definitions(${_target_name} PRIVATE
-    FLOOD_TUBER_VERSION="${PROJECT_VERSION}"
+    FLOOD_TUBER_VERSION="${_flood_version}"
 )
 
 target_compile_options(${_target_name} PRIVATE
