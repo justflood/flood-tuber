@@ -178,6 +178,7 @@ struct flood_tuber_data {
 	float talk_interval;    // Time in seconds between talking frames (default 0.10f)
 	float effect_speed;
 	float effect_strength;
+	float effect_weight;       // 0..1: how strong the motion is right now (eased on and off)
 	float timer_effect;        // Continuous timer for sin/cos motion calculations
 	float offset_x;            // Calculated X offset for rendering
 	float offset_y;            // Calculated Y offset for rendering

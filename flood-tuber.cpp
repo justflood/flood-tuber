@@ -469,7 +469,7 @@ static void draw_avatar_crossfade(struct flood_tuber_data *data, gs_texture_t *t
 		t = data->transition.elapsed / data->transition.duration;
 	t = fminf(fmaxf(t, 0.0f), 1.0f);
 	if (data->fade_smooth)
-		t = t * t * (3.0f - 2.0f * t);
+		t = t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f); // smootherstep: softer start and end than smoothstep
 
 	FloodFitRect ra = fit_in_reference_box(tex_old, ref_w, ref_h);
 	FloodFitRect rb = fit_in_reference_box(tex_new, ref_w, ref_h);
@@ -907,18 +907,26 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 	data->offset_x = 0.0f;
 	data->offset_y = 0.0f;
 
-	if (data->current_state == AvatarState::TALKING && data->talk_effect != TalkingEffect::NONE) {
+	// The motion fades in and out (about 0.1 s) instead of stopping dead when the talking state ends
+	bool moving = data->current_state == AvatarState::TALKING && data->talk_effect != TalkingEffect::NONE;
+	float weight_target = moving ? 1.0f : 0.0f;
+	data->effect_weight += (weight_target - data->effect_weight) * (1.0f - expf(-seconds * 10.0f));
+
+	if (moving || data->effect_weight > 0.001f) {
+		// The phase keeps running while the motion dies down, so it does not jump when it restarts
 		data->timer_effect += seconds * data->effect_speed;
 
 		// Amplitude en % de la hauteur de référence : indépendante de la résolution des PNG
-		float amp = data->effect_strength * 0.01f * (float)data->reference_height;
+		float amp = data->effect_strength * 0.01f * (float)data->reference_height * data->effect_weight;
 
 		if (data->talk_effect == TalkingEffect::BOUNCE) {
 			data->offset_y = -fabsf(sinf(data->timer_effect * 5.0f)) * amp;
 		}
 		else if (data->talk_effect == TalkingEffect::SHAKE) {
-			data->offset_x = sinf(data->timer_effect * 25.0f) * amp * 0.8f;
-			data->offset_y = cosf(data->timer_effect * 20.0f) * amp * 0.8f;
+			// Two incommensurate sines per axis and a slow amplitude wobble: no fixed ellipse
+			float wobble = 0.8f + 0.2f * sinf(data->timer_effect * 2.3f);
+			data->offset_x = (sinf(data->timer_effect * 25.0f) + 0.5f * sinf(data->timer_effect * 37.0f + 1.3f)) * amp * 0.5f * wobble;
+			data->offset_y = (cosf(data->timer_effect * 20.0f) + 0.5f * sinf(data->timer_effect * 31.0f + 0.7f)) * amp * 0.5f * wobble;
 		}
 		else if (data->talk_effect == TalkingEffect::OSCILLATING) {
 			// Dérive douce en huit : x suit une sinusoïde, y une sinusoïde deux fois plus rapide
@@ -926,6 +934,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 			data->offset_y = sinf(data->timer_effect * 6.0f) * amp * 0.5f;
 		}
 	} else {
+		data->effect_weight = 0.0f;
 		data->timer_effect = 0.0f;
 	}
 }
