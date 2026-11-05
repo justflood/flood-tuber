@@ -175,6 +175,9 @@ struct flood_tuber_data {
 	// -- Motion Effects --
 	TalkingEffect talk_effect;
 	bool mirror;
+	bool mouth_by_volume;      // True: the talking frame follows the voice level instead of cycling
+	float mouth_range;         // dB above the threshold that reach the widest mouth (frame C)
+	float level_db;            // Smoothed voice level that drives the mouth frame
 	float talk_interval;    // Time in seconds between talking frames (default 0.10f)
 	float effect_speed;
 	float effect_strength;

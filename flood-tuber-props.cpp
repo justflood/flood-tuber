@@ -259,6 +259,8 @@ void flood_tuber_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "threshold",          -30.0);
 	obs_data_set_default_int(settings,    "release_delay",       200);
 	obs_data_set_default_double(settings, "talking_speed",        0.10);
+	obs_data_set_default_string(settings, "mouth_mode",         "Cycle");
+	obs_data_set_default_int(settings,    "mouth_range",          20);
 
 	obs_data_set_default_int(settings, "action_duration",        4000);
 	obs_data_set_default_int(settings, "action_interval_min",   60000);
@@ -791,6 +793,16 @@ obs_properties_t *flood_tuber_properties(void *data)
 	obs_property_t *p_spd = obs_properties_add_float_slider(audio,
 		"talking_speed", obs_module_text("talking_speed"), 0.01, 1.0, 0.01);
 	obs_property_set_long_description(p_spd, obs_module_text("talking_speed_tooltip"));
+
+	obs_property_t *p_mouth = obs_properties_add_list(audio, "mouth_mode",
+		obs_module_text("mouth_mode"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+	obs_property_list_add_string(p_mouth, obs_module_text("mouth_mode_cycle"),  "Cycle");
+	obs_property_list_add_string(p_mouth, obs_module_text("mouth_mode_volume"), "Volume");
+	obs_property_set_long_description(p_mouth, obs_module_text("mouth_mode_tooltip"));
+
+	obs_property_t *p_range = obs_properties_add_int_slider(audio,
+		"mouth_range", obs_module_text("mouth_range"), 1, 60, 1);
+	obs_property_set_long_description(p_range, obs_module_text("mouth_range_tooltip"));
 
 	obs_properties_add_bool(audio, "keep_audio_on_switch",
 		obs_module_text("keep_audio_on_switch"));

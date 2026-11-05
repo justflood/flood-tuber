@@ -639,6 +639,7 @@ static void *flood_tuber_create(obs_data_t *settings, obs_source_t *source)
 	struct flood_tuber_data *data = (struct flood_tuber_data *)bzalloc(sizeof(struct flood_tuber_data));
 	data->source = source;
 	data->current_db = -100.0f;
+	data->level_db = -100.0f;
 	data->current_state = AvatarState::IDLE;
 	data->talking_frame_index = 0;
 	data->timer_release_hold = 0.0f;
@@ -800,6 +801,10 @@ static void flood_tuber_update(void *data_ptr, obs_data_t *settings)
 	if (data->reference_height < 16) data->reference_height = 512;
 	data->talk_interval = (float)obs_data_get_double(settings, "talking_speed");
 	if (data->talk_interval < 0.01f) data->talk_interval = 0.01f;
+	const char *mouth_mode = obs_data_get_string(settings, "mouth_mode");
+	data->mouth_by_volume = mouth_mode && strcmp(mouth_mode, "Volume") == 0;
+	data->mouth_range = (float)obs_data_get_int(settings, "mouth_range");
+	if (data->mouth_range < 1.0f) data->mouth_range = 1.0f;
 
 	const char *audio_source_name = obs_data_get_string(settings, "audio_source");
     if (!audio_source_name || !audio_source_name[0]) {
@@ -856,10 +861,19 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 	}
 
 	if (data->current_state == AvatarState::TALKING) {
-		data->timer_talk_anim += seconds;
-		if (data->timer_talk_anim > data->talk_interval) {
-			data->talking_frame_index = (data->talking_frame_index + 1) % 3;
-			data->timer_talk_anim = 0.0f;
+		if (data->mouth_by_volume) {
+			// Envelope follower: the level rises fast and falls slowly, so the mouth does not flicker
+			float rate = data->current_db > data->level_db ? 30.0f : 6.0f;
+			data->level_db += (data->current_db - data->level_db) * (1.0f - expf(-seconds * rate));
+			// 0 at the threshold, 1 at threshold + mouth_range: three equal bands for frames A, B and C
+			float openness = (data->level_db - data->threshold) / data->mouth_range;
+			data->talking_frame_index = openness < 0.33f ? 0 : (openness < 0.66f ? 1 : 2);
+		} else {
+			data->timer_talk_anim += seconds;
+			if (data->timer_talk_anim > data->talk_interval) {
+				data->talking_frame_index = (data->talking_frame_index + 1) % 3;
+				data->timer_talk_anim = 0.0f;
+			}
 		}
 	}
 
