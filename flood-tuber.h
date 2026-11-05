@@ -189,6 +189,8 @@ struct flood_tuber_data {
 		float fade_duration;       // Fade length in seconds
 		bool fade_effect_failed;   // Shader could not be created: do not retry
 		gs_effect_t *fade_effect;  // Shader that blends the two avatars
+		gs_texrender_t *fade_snapshot; // Blend on screen when a fade was interrupted: the outgoing side
+		bool fade_from_snapshot;   // True while the outgoing side of the fade is fade_snapshot
 		bool avatar_ready;         // True once the first avatar has been loaded
 		uint64_t avatar_hash;      // Hash of the image paths: detects an avatar change
 };

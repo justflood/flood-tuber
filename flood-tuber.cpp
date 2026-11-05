@@ -316,19 +316,30 @@ static bool ensure_fade_effect(struct flood_tuber_data *data)
 	return data->fade_effect != NULL;
 }
 
+static bool capture_fade_snapshot(struct flood_tuber_data *data);
+
 // Called from flood_tuber_update() when the avatar changes, in the graphics context.
-// The displayed avatar moves to 'prev' so its textures stay alive during the fade,
-// then 'cur' is reloaded with the new avatar. A fade still running is cut short:
-// the latest request wins.
+// Outgoing side of the new fade:
+// - no fade running: the displayed avatar moves to 'prev' so its textures stay alive during the fade;
+// - a fade is running: the blend on screen is frozen into fade_snapshot, so the new fade starts
+//   from what is visible instead of jumping to the target of the interrupted fade.
+// Then 'cur' is reloaded with the new avatar. The latest request wins.
 static void begin_avatar_fade(struct flood_tuber_data *data, bool fade)
 {
+	bool frozen = false;
+	if (fade && data->transition.active && ensure_fade_effect(data))
+		frozen = capture_fade_snapshot(data);
+
 	data->prev.Free();
 	data->transition.active = false;
+	data->fade_from_snapshot = frozen;
 
 	if (!fade || !ensure_fade_effect(data))
 		return;
 
-	std::swap(data->prev, data->cur);
+	// Frozen: 'cur' still holds the avatar of the interrupted fade, it is reloaded right after
+	if (!frozen)
+		std::swap(data->prev, data->cur);
 	data->transition.elapsed = 0.0f;
 	data->transition.duration = data->fade_duration;
 	data->transition.active = true;
@@ -445,9 +456,10 @@ static gs_texture_t *select_avatar_texture(struct flood_tuber_data *data, Avatar
 }
 
 // Draws the outgoing and the new avatar in the reference box, blended by the fade shader.
-// The caller has already set the matrix (motion offset, mirror).
+// The caller has already set the matrix (motion offset, mirror). With to_texture, the shader
+// output is written as is (straight alpha), so the result can be sampled like any avatar texture.
 static void draw_avatar_crossfade(struct flood_tuber_data *data, gs_texture_t *tex_old, gs_texture_t *tex_new,
-				  uint32_t ref_w, uint32_t ref_h)
+				  uint32_t ref_w, uint32_t ref_h, bool to_texture)
 {
 	gs_effect_t *effect = data->fade_effect;
 	gs_texture_t *any_tex = tex_new ? tex_new : tex_old;
@@ -498,6 +510,8 @@ static void draw_avatar_crossfade(struct flood_tuber_data *data, gs_texture_t *t
 
 	gs_blend_state_push();
 	gs_reset_blend_state();
+	if (to_texture)
+		gs_blend_function_separate(GS_BLEND_ONE, GS_BLEND_ZERO, GS_BLEND_ONE, GS_BLEND_ZERO);
 	while (gs_effect_loop(effect, "Draw"))
 		gs_draw_sprite(any_tex, 0, ref_w, ref_h);
 	gs_blend_state_pop();
@@ -708,6 +722,10 @@ static void flood_tuber_destroy(void *d)
 		if (data->fade_effect) {
 			gs_effect_destroy(data->fade_effect);
 			data->fade_effect = NULL;
+		}
+		if (data->fade_snapshot) {
+			gs_texrender_destroy(data->fade_snapshot);
+			data->fade_snapshot = NULL;
 		}
 	obs_leave_graphics();
 	obs_hotkey_unregister(data->hotkey_next);
@@ -926,6 +944,36 @@ static void flood_tuber_reference_size(struct flood_tuber_data *data, uint32_t *
 	if (*w < 1) *w = 1;
 }
 
+// Freezes the blend on screen (outgoing + new avatar at the current fade time) into fade_snapshot.
+// Motion and mirror are not baked in: they are applied when the fade is drawn.
+static bool capture_fade_snapshot(struct flood_tuber_data *data)
+{
+	uint32_t ref_w, ref_h;
+	flood_tuber_reference_size(data, &ref_w, &ref_h);
+
+	gs_texture_t *tex_old = select_avatar_texture(data, &data->prev);
+	gs_texture_t *tex_new = select_avatar_texture(data, &data->cur);
+	if (!tex_old && !tex_new)
+		return false;
+
+	if (!data->fade_snapshot)
+		data->fade_snapshot = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+	if (!data->fade_snapshot)
+		return false;
+
+	gs_texrender_reset(data->fade_snapshot);
+	if (!gs_texrender_begin(data->fade_snapshot, ref_w, ref_h))
+		return false;
+
+	struct vec4 clear_color;
+	vec4_set(&clear_color, 0.0f, 0.0f, 0.0f, 0.0f);
+	gs_clear(GS_CLEAR_COLOR, &clear_color, 1.0f, 0);
+	gs_ortho(0.0f, (float)ref_w, 0.0f, (float)ref_h, -100.0f, 100.0f);
+	draw_avatar_crossfade(data, tex_old, tex_new, ref_w, ref_h, true);
+	gs_texrender_end(data->fade_snapshot);
+	return true;
+}
+
 // Render: draws the current avatar. While a fade runs, the outgoing and the new avatar are blended.
 static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 {
@@ -934,7 +982,10 @@ static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 
 	gs_texture_t *tex = select_avatar_texture(data, &data->cur);
 	bool fading = data->transition.active && data->fade_effect != nullptr;
-	gs_texture_t *tex_old = fading ? select_avatar_texture(data, &data->prev) : nullptr;
+	gs_texture_t *tex_old = nullptr;
+	if (fading)
+		tex_old = data->fade_from_snapshot ? gs_texrender_get_texture(data->fade_snapshot)
+		                                   : select_avatar_texture(data, &data->prev);
 
 	if (!tex && !tex_old)
 		return;
@@ -952,7 +1003,7 @@ static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 	}
 
 	if (fading) {
-		draw_avatar_crossfade(data, tex_old, tex, ref_w, ref_h);
+		draw_avatar_crossfade(data, tex_old, tex, ref_w, ref_h, false);
 	} else if (tex) {
 		FloodFitRect r = fit_in_reference_box(tex, ref_w, ref_h);
 		obs_source_draw(tex, r.x, r.y, (uint32_t)r.w, (uint32_t)r.h, false);
