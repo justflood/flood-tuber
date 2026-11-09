@@ -1,5 +1,5 @@
 #include "webp-decoder.h"
-#include <fstream>
+#include <util/platform.h>
 #include <vector>
 #include <webp/decode.h>
 #include <webp/demux.h>
@@ -30,19 +30,24 @@ void WebPDecoder::VerifyFree() {
 bool WebPDecoder::Load(const char* path) {
     VerifyFree();
 
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
+    if (!path || !*path) return false;
+
+    FILE* f = os_fopen(path, "rb");
+    if (!f) {
         BLOG(LOG_WARNING, "Failed to open file: %s", path);
         return false;
     }
 
-    std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
+    int64_t size = os_fgetsize(f);
+    if (size <= 0) {
+        fclose(f);
+        return false;
+    }
 
-    if (size <= 0) return false;
-
-    std::vector<uint8_t> buffer(size);
-    if (!file.read((char*)buffer.data(), size)) {
+    std::vector<uint8_t> buffer((size_t)size);
+    size_t read_bytes = fread(buffer.data(), 1, (size_t)size, f);
+    fclose(f);
+    if (read_bytes != (size_t)size) {
         return false;
     }
 
@@ -79,10 +84,10 @@ bool WebPDecoder::DecodeData(const uint8_t* data, size_t size) {
     BLOG(LOG_INFO, "Decoding WebP: %dx%d, Frames: %d, Loops: %d", width, height, anim_info.frame_count, loop_count);
 
     int prev_timestamp = 0;
-    
+
     // We must decode ALL frames to get correct blending
     obs_enter_graphics();
-    
+
     while (WebPAnimDecoderHasMoreFrames(dec)) {
         uint8_t* buf;
         int timestamp;
@@ -101,7 +106,7 @@ bool WebPDecoder::DecodeData(const uint8_t* data, size_t size) {
         frame.texture = tex;
         frame.timestamp_ms = timestamp;
         frame.duration_ms = timestamp - prev_timestamp;
-        
+
         frames.push_back(frame);
         prev_timestamp = timestamp;
     }

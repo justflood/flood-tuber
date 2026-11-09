@@ -1,7 +1,7 @@
 ; Flood Tuber — Inno Setup Installer Script (OBS Studio 33+ ProgramData layout)
 #define MyAppName "Flood Tuber"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.2.0"
+  #define MyAppVersion "1.3.0"
 #endif
 #define MyAppPublisher "justflood"
 #define MyAppURL "https://github.com/justflood/flood-tuber"
@@ -43,12 +43,12 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 ; --- English ---
 english.info_title=About Flood Tuber
 english.info_subtitle=A free, open-source VTuber avatar plugin for OBS Studio (OBS 33+)
-english.info_body=Flood Tuber  v{#MyAppVersion}%nby justflood%n%nhttps://github.com/justflood/flood-tuber%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nYour avatar reacts to your microphone. When you speak it animates,%nwhen you go silent it returns to idle. That's the core idea.%n%nFEATURES%n  ·  Talking animation with up to 3 mouth frames  (A → B → C)%n  ·  Blink animation with randomized intervals%n  ·  Idle action animation  (e.g. sipping coffee)%n  ·  Talking motion effects:  Bounce  or  Shake%n  ·  Built-in Avatar Library with 7 ready-to-use avatars%n  ·  PNG, GIF, WebP, and Animated PNG (APNG) support%n  ·  Full English, Turkish, and French localization%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nREQUIREMENT:  OBS Studio 33.0 or newer must be installed.%n(Legacy custom avatars in Program Files are automatically migrated & backed up to ProgramData.)%n%nAfter installation:%n  Open OBS Studio → Add Source → "Flood Tuber Avatar"
+english.info_body=Flood Tuber  v{#MyAppVersion}%nby justflood%n%nhttps://github.com/justflood/flood-tuber%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nYour avatar reacts to your microphone. When you speak it animates,%nwhen you go silent it returns to idle. That's the core idea.%n%nFEATURES%n  ·  Talking animation with up to 3 mouth frames  (A → B → C)%n  ·  Blink animation with randomized intervals%n  ·  Idle action animation  (e.g. sipping coffee)%n  ·  Talking motion effects:  Bounce, Shake, or Oscillating%n  ·  Built-in Avatar Library with 7 ready-to-use avatars%n  ·  PNG, GIF, WebP, and Animated PNG (APNG) support%n  ·  Full English, Turkish, French, Japanese, and Chinese localization%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nREQUIREMENT:  OBS Studio 33.0 or newer must be installed.%n(Legacy custom avatars in Program Files are automatically migrated & backed up to ProgramData.)%n%nAfter installation:%n  Open OBS Studio → Add Source → "Flood Tuber Avatar"
 
 ; --- Turkish ---
 turkish.info_title=Flood Tuber Hakkında
 turkish.info_subtitle=OBS Studio için ücretsiz, açık kaynaklı bir VTuber avatar eklentisi (OBS 33+)
-turkish.info_body=Flood Tuber  v{#MyAppVersion}%njustflood tarafından%n%nhttps://github.com/justflood/flood-tuber%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nAvatarınız mikrofonunuza tepki verir. Konuştuğunuzda animasyon yapar,%nsessiz kaldığınızda boşta durumuna döner.%n%nÖZELLİKLER%n  ·  3 adede kadar ağız karesi ile konuşma animasyonu  (A → B → C)%n  ·  Rastgele aralıklı göz kırpma animasyonu%n  ·  Boşta aksiyon animasyonu  (örn: kahve içme)%n  ·  Konuşma hareket efektleri:  Zıplama  veya  Titreme%n  ·  7 kullanıma hazır avatar ile dahili Avatar Kütüphanesi%n  ·  PNG, GIF, WebP ve Animasyonlu PNG (APNG) desteği%n  ·  Tam İngilizce, Türkçe ve Fransızca dil desteği%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nGEREKSİNİM:  OBS Studio 33.0 veya üzeri kurulu olmalıdır.%n(Program Files içindeki eski sürüm özel avatarlarınız otomatik olarak ProgramData klasörüne taşınır ve yedeklenir.)%n%nKurulum sonrası:%n  OBS Studio'yu açın → Kaynak Ekle → "Flood Tuber Avatar"
+turkish.info_body=Flood Tuber  v{#MyAppVersion}%njustflood tarafından%n%nhttps://github.com/justflood/flood-tuber%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nAvatarınız mikrofonunuza tepki verir. Konuştuğunuzda animasyon yapar,%nsessiz kaldığınızda boşta durumuna döner.%n%nÖZELLİKLER%n  ·  3 adede kadar ağız karesi ile konuşma animasyonu  (A → B → C)%n  ·  Rastgele aralıklı göz kırpma animasyonu%n  ·  Boşta aksiyon animasyonu  (örn: kahve içme)%n  ·  Konuşma hareket efektleri:  Zıplama, Titreme veya Salınım%n  ·  7 kullanıma hazır avatar ile dahili Avatar Kütüphanesi%n  ·  PNG, GIF, WebP ve Animasyonlu PNG (APNG) desteği%n  ·  Tam İngilizce, Türkçe, Fransızca, Japonca ve Çince dil desteği%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nGEREKSİNİM:  OBS Studio 33.0 veya üzeri kurulu olmalıdır.%n(Program Files içindeki eski sürüm özel avatarlarınız otomatik olarak ProgramData klasörüne taşınır ve yedeklenir.)%n%nKurulum sonrası:%n  OBS Studio'yu açın → Kaynak Ekle → "Flood Tuber Avatar"
 
 [InstallDelete]
 ; Clean up legacy bin/64bit subfolder if present in ProgramData

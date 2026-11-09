@@ -4,11 +4,47 @@
 #include <util/config-file.h>
 #include <util/platform.h>
 #include <string.h>
-
+#include <cstdio>
+#include <vector>
+#include <string>
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
+#else
+#include <spawn.h>
+#include <unistd.h>
+#include <sys/wait.h>
+extern char **environ;
 #endif
+
+// Portable helper to open folders or URLs in the OS default handler (UTF-8 safe on Windows)
+static void os_open_url_or_path(const char *target)
+{
+	if (!target || !*target) return;
+#if defined(_WIN32)
+	wchar_t *wtarget = NULL;
+	os_utf8_to_wcs_ptr(target, 0, &wtarget);
+	if (wtarget) {
+		ShellExecuteW(NULL, L"open", wtarget, NULL, NULL, SW_SHOWNORMAL);
+		bfree(wtarget);
+	}
+#elif defined(__APPLE__)
+	pid_t pid;
+	char *argv[] = {(char *)"open", (char *)target, NULL};
+	if (posix_spawnp(&pid, "open", NULL, NULL, argv, environ) == 0) {
+		int status;
+		waitpid(pid, &status, WNOHANG);
+	}
+#else
+	pid_t pid;
+	char *argv[] = {(char *)"xdg-open", (char *)target, NULL};
+	if (posix_spawnp(&pid, "xdg-open", NULL, NULL, argv, environ) == 0) {
+		int status;
+		waitpid(pid, &status, WNOHANG);
+	}
+#endif
+}
+
 
 // Returns the custom avatars folder path from source settings.
 // Returns NULL if not set. Do NOT free the returned pointer.
@@ -72,13 +108,79 @@ static bool enum_audio_sources(void *data, obs_source_t *source)
 	return true;
 }
 
+// Lists the avatars: built-in folder followed by custom folder, without duplicates.
+void flood_tuber_list_avatars(obs_data_t *settings, std::vector<std::string> &out)
+{
+	auto add_unique = [&](const char *name) {
+		for (const auto &n : out)
+			if (n == name) return;
+		out.emplace_back(name);
+	};
+
+	auto scan = [&](const char *dir) {
+		if (!dir || !*dir) return;
+		os_dir_t *d = os_opendir(dir);
+		if (!d) return;
+		struct os_dirent *ent;
+		while ((ent = os_readdir(d)) != NULL)
+			if (ent->directory && ent->d_name[0] != '.')
+				add_unique(ent->d_name);
+		os_closedir(d);
+	};
+
+	char *builtin = obs_module_file("avatars");
+	scan(builtin);
+	if (builtin) bfree(builtin);
+
+	const char *custom = settings ? get_custom_dir(settings) : NULL;
+	if (custom && os_file_exists(custom))
+		scan(custom);
+}
+
+static void fill_avatar_list(obs_property_t *list, const std::vector<std::string> &names, bool with_none)
+{
+	if (!list) return;
+	obs_property_list_clear(list);
+	if (with_none)
+		obs_property_list_add_string(list, obs_module_text("slot_none"), "");
+	for (const auto &n : names)
+		obs_property_list_add_string(list, n.c_str(), n.c_str());
+}
+
+// Fills avatar_list and the 10 slots across the root properties container.
+static void fill_all_lists(obs_properties_t *props_root, obs_data_t *settings)
+{
+	std::vector<std::string> names;
+	flood_tuber_list_avatars(settings, names);
+
+	fill_avatar_list(obs_properties_get(props_root, "avatar_list"), names, false);
+	for (int i = 1; i <= FLOOD_SLOT_COUNT; i++) {
+		char key[16];
+		snprintf(key, sizeof(key), "slot_%d", i);
+		fill_avatar_list(obs_properties_get(props_root, key), names, true);
+	}
+}
+
+// "Refresh" button: reads the current source settings and repopulates all avatar dropdowns
+static bool refresh_avatar_lists(obs_properties_t *props, obs_property_t *p, void *data)
+{
+	(void)p;
+	struct flood_tuber_data *tuber = (struct flood_tuber_data *)data;
+	if (!tuber || !tuber->source) return false;
+
+	obs_data_t *settings = obs_source_get_settings(tuber->source);
+	fill_all_lists(props, settings);
+	obs_data_release(settings);
+	return true;
+}
+
 // Load avatar images and settings.ini into an obs_data_t object.
 // as_default=true  → sets *default* values (plugin init)
 // as_default=false → sets *current* values (load via UI)
-void apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, bool as_default)
+bool apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, bool as_default)
 {
 	char *base_dir = resolve_avatar_dir(avatar_name, settings);
-	if (!base_dir) return;
+	if (!base_dir) return false;
 
 	auto set_str = [&](const char *key, const char *val) {
 		if (as_default) obs_data_set_default_string(settings, key, val);
@@ -91,6 +193,10 @@ void apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, boo
 	auto set_dbl = [&](const char *key, double val) {
 		if (as_default) obs_data_set_default_double(settings, key, val);
 		else obs_data_set_double(settings, key, val);
+	};
+	auto set_bool = [&](const char *key, bool val) {
+		if (as_default) obs_data_set_default_bool(settings, key, val);
+		else obs_data_set_bool(settings, key, val);
 	};
 	auto set_img = [&](const char *key, const char *file) {
 		struct dstr final_path = {0};
@@ -145,18 +251,19 @@ void apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, boo
 		load_int("Motion", "strength",     "motion_strength");
 
 		if (config_has_user_value(config, "General", "mirror"))
-			obs_data_set_bool(settings, "mirror",
-				config_get_bool(config, "General", "mirror"));
+			set_bool("mirror", config_get_bool(config, "General", "mirror"));
 
 		config_close(config);
 	}
 	dstr_free(&ini_path);
 	bfree(base_dir);
+	return true;
 }
 
 // Set plugin defaults on first load
 void flood_tuber_defaults(obs_data_t *settings)
 {
+	obs_data_set_default_string(settings, "audio_source", "");
 	obs_data_set_default_double(settings, "threshold",          -30.0);
 	obs_data_set_default_int(settings,    "release_delay",       200);
 	obs_data_set_default_double(settings, "talking_speed",        0.10);
@@ -168,10 +275,12 @@ void flood_tuber_defaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, "blink_interval_min",     2000);
 	obs_data_set_default_int(settings, "blink_interval_max",     8000);
 
-	obs_data_set_default_string(settings, "motion_type",    "Shake");
-	obs_data_set_default_int(settings,    "motion_speed",     100);
-	obs_data_set_default_int(settings,    "motion_strength",    3);
-	obs_data_set_default_bool(settings,   "mirror",          false);
+	obs_data_set_default_string(settings, "motion_type",           "Shake");
+	obs_data_set_default_int(settings,    "motion_speed",           100);
+	obs_data_set_default_int(settings,    "motion_strength",          3);
+	obs_data_set_default_bool(settings,   "use_reference_height", false);
+	obs_data_set_default_int(settings,    "reference_height",       512);
+	obs_data_set_default_bool(settings,   "keep_audio_on_switch", false);
 
 	apply_avatar_to_settings(settings, "Flood Tuber Avatar", true);
 	obs_data_set_default_string(settings, "avatar_list", "Flood Tuber Avatar");
@@ -272,15 +381,15 @@ static void write_settings_ini(const char *dir_path, obs_data_t *settings)
 	dstr_free(&ini_path);
 }
 
-// Copies a file from src to dst. Returns true on success.
+// Copies a file from src to dst (UTF-8 safe). Returns true on success.
 static bool copy_file_safe(const char *src, const char *dst)
 {
 	if (!src || !*src || !os_file_exists(src)) return false;
 
-	FILE *in = fopen(src, "rb");
+	FILE *in = os_fopen(src, "rb");
 	if (!in) return false;
 
-	FILE *out = fopen(dst, "wb");
+	FILE *out = os_fopen(dst, "wb");
 	if (!out) { fclose(in); return false; }
 
 	char buf[8192];
@@ -433,10 +542,8 @@ static bool save_as_new_avatar(obs_properties_t *props, obs_property_t *p, void 
 	// Save settings.ini, select the new avatar, and clear the name input
 	write_settings_ini(avatar_dir.array, settings);
 
-	// Add the new avatar to the dropdown list immediately
-	obs_property_t *list = obs_properties_get(props, "avatar_list");
-	if (list)
-		obs_property_list_add_string(list, new_name, new_name);
+	// Reload avatar_list and all slots (the new folder now exists)
+	fill_all_lists(props, settings);
 
 	obs_data_set_string(settings, "avatar_list", new_name);
 	obs_data_set_string(settings, "new_avatar_name", "");
@@ -451,7 +558,7 @@ static bool save_as_new_avatar(obs_properties_t *props, obs_property_t *p, void 
 	return true;
 }
 
-// Opens the custom avatars folder in Windows Explorer
+// Opens the custom avatars folder in OS default file manager
 static bool open_library_folder(obs_properties_t *props, obs_property_t *p, void *data)
 {
 	(void)props; (void)p;
@@ -464,17 +571,13 @@ static bool open_library_folder(obs_properties_t *props, obs_property_t *p, void
 	const char *custom = get_custom_dir(settings);
 	if (custom) {
 		BLOG(LOG_INFO, "open_folder: opening %s", custom);
-#ifdef _WIN32
-		ShellExecuteA(NULL, "open", custom, NULL, NULL, SW_SHOWDEFAULT);
-#endif
+		os_open_url_or_path(custom);
 	} else {
 		// No custom folder set — open built-in avatars dir
 		char *data_dir = obs_module_file("avatars");
 		if (data_dir) {
 			BLOG(LOG_INFO, "open_folder: no custom dir, opening built-in: %s", data_dir);
-#ifdef _WIN32
-			ShellExecuteA(NULL, "open", data_dir, NULL, NULL, SW_SHOWDEFAULT);
-#endif
+			os_open_url_or_path(data_dir);
 			bfree(data_dir);
 		}
 	}
@@ -490,17 +593,10 @@ static bool load_avatar(obs_properties_t *props, obs_property_t *p, void *data)
 	if (!tuber || !tuber->source) return false;
 
 	obs_data_t *settings = obs_source_get_settings(tuber->source);
-	if (!settings) return false;
-
 	const char *selected = obs_data_get_string(settings, "avatar_list");
-	if (!selected || !*selected) {
-		obs_data_release(settings);
-		return false;
-	}
-	apply_avatar_to_settings(settings, selected, false);
-	obs_source_update(tuber->source, settings);
+	bool ok = selected && *selected && switch_to_avatar(tuber, selected);
 	obs_data_release(settings);
-	return true;
+	return ok;
 }
 
 // Helper: adds a file-picker property for an image slot (tooltip optional)
@@ -517,10 +613,7 @@ static void add_file_prop(obs_properties_t *props, const char *name, const char 
 static bool open_github_page(obs_properties_t *props, obs_property_t *p, void *data)
 {
 	(void)props; (void)p; (void)data;
-#ifdef _WIN32
-	ShellExecuteA(NULL, "open", "https://github.com/justflood/flood-tuber",
-	              NULL, NULL, SW_SHOWNORMAL);
-#endif
+	os_open_url_or_path("https://github.com/justflood/flood-tuber");
 	return false;
 }
 
@@ -528,10 +621,7 @@ static bool open_github_page(obs_properties_t *props, obs_property_t *p, void *d
 static bool open_website_page(obs_properties_t *props, obs_property_t *p, void *data)
 {
 	(void)props; (void)p; (void)data;
-#ifdef _WIN32
-	ShellExecuteA(NULL, "open", "https://floodtechlab.com/floodtuber/",
-	              NULL, NULL, SW_SHOWNORMAL);
-#endif
+	os_open_url_or_path("https://floodtechlab.com/floodtuber/");
 	return false;
 }
 
@@ -547,57 +637,22 @@ static bool on_motion_type_changed(obs_properties_t *props, obs_property_t *p,
 	return true;
 }
 
-
-// Helper: adds custom dir avatar entries to a list property, avoiding duplicates
-static void populate_custom_avatars(obs_property_t *list, const char *custom_path)
-{
-	if (!custom_path || !*custom_path || !os_file_exists(custom_path)) return;
-	os_dir_t *cdir = os_opendir(custom_path);
-	if (!cdir) return;
-	struct os_dirent *ent;
-	while ((ent = os_readdir(cdir)) != NULL) {
-		if (ent->directory && ent->d_name[0] != '.') {
-			size_t count = obs_property_list_item_count(list);
-			bool found = false;
-			for (size_t i = 0; i < count; i++) {
-				const char *v = obs_property_list_item_string(list, i);
-				if (v && strcmp(v, ent->d_name) == 0) { found = true; break; }
-			}
-			if (!found)
-				obs_property_list_add_string(list, ent->d_name, ent->d_name);
-		}
-	}
-	os_closedir(cdir);
-}
-
-// Called when the custom avatars folder path changes — rebuilds the dropdown
-static bool on_custom_path_changed(obs_properties_t *props, obs_property_t *p,
-                                   obs_data_t *settings)
+// Shows/hides Reference Height input based on use_reference_height checkbox
+static bool on_use_reference_height_changed(obs_properties_t *props, obs_property_t *p,
+                                            obs_data_t *settings)
 {
 	(void)p;
-	obs_property_t *list = obs_properties_get(props, "avatar_list");
-	if (!list) return false;
+	bool use_ref = obs_data_get_bool(settings, "use_reference_height");
+	obs_property_set_visible(obs_properties_get(props, "reference_height"), use_ref);
+	return true;
+}
 
-	// Clear the entire list and re-add built-in avatars
-	obs_property_list_clear(list);
 
-	char *data_dir = obs_module_file("avatars");
-	if (data_dir) {
-		os_dir_t *dir = os_opendir(data_dir);
-		if (dir) {
-			struct os_dirent *ent;
-			while ((ent = os_readdir(dir)) != NULL)
-				if (ent->directory && ent->d_name[0] != '.')
-					obs_property_list_add_string(list, ent->d_name, ent->d_name);
-			os_closedir(dir);
-		}
-		bfree(data_dir);
-	}
-
-	// Add custom avatars from the new path
-	const char *custom = obs_data_get_string(settings, "custom_avatars_path");
-	populate_custom_avatars(list, custom);
-
+// Called when the custom avatars folder path changes — rebuilds the dropdowns
+static bool on_custom_path_changed(obs_properties_t *props, obs_property_t *p, obs_data_t *settings)
+{
+	(void)p;
+	fill_all_lists(props, settings);
 	return true;
 }
 
@@ -627,44 +682,21 @@ obs_properties_t *flood_tuber_properties(void *data)
 	struct flood_tuber_data *tuber = (struct flood_tuber_data *)data;
 	obs_properties_t *props = obs_properties_create();
 
-	// ── 1. Avatar Library ───────────────────
+	// ── 1. Avatar Library ──────────────────────────────────────────────────
 	obs_properties_t *lib = obs_properties_create();
 	obs_properties_add_group(props, "library_group",
 		obs_module_text("library_group"), OBS_GROUP_NORMAL, lib);
 
-	obs_property_t *list = obs_properties_add_list(lib, "avatar_list",
+	obs_properties_add_list(lib, "avatar_list",
 		obs_module_text("avatar_list"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
-
-	// Enumerate built-in avatars from data dir
-	char *avatars_dir = obs_module_file("avatars");
-	if (avatars_dir) {
-		os_dir_t *dir = os_opendir(avatars_dir);
-		if (dir) {
-			struct os_dirent *ent;
-			while ((ent = os_readdir(dir)) != NULL)
-				if (ent->directory && ent->d_name[0] != '.')
-					obs_property_list_add_string(list, ent->d_name, ent->d_name);
-			os_closedir(dir);
-		}
-		bfree(avatars_dir);
-	}
-
-	// Enumerate custom avatars from user-specified folder
-	if (tuber && tuber->source) {
-		obs_data_t *cur_settings = obs_source_get_settings(tuber->source);
-		if (cur_settings) {
-			const char *custom = get_custom_dir(cur_settings);
-			populate_custom_avatars(list, custom);
-			obs_data_release(cur_settings);
-		}
-	}
-
+	obs_properties_add_button2(lib, "refresh_avatars_btn",
+		obs_module_text("refresh_avatars_btn"), refresh_avatar_lists, data);
 	obs_properties_add_button2(lib, "load_avatar_btn",
 		obs_module_text("load_avatar_btn"), load_avatar, data);
 	obs_properties_add_button2(lib, "save_settings_btn",
 		obs_module_text("save_settings_btn"), save_settings_to_avatar, data);
 
-	// Custom avatars folder picker with live-refresh callback
+	// Custom folder
 	obs_properties_add_text(lib, "hint_custom_folder", NULL, OBS_TEXT_INFO);
 	obs_property_t *folder_prop = obs_properties_add_path(lib, "custom_avatars_path",
 		obs_module_text("custom_avatars_path"), OBS_PATH_DIRECTORY, NULL, NULL);
@@ -672,7 +704,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 	obs_properties_add_button2(lib, "clear_custom_folder_btn",
 		obs_module_text("clear_custom_folder"), clear_custom_folder, data);
 
-	// Save As New Avatar
+	// Save as new avatar
 	obs_properties_add_text(lib, "new_avatar_name",
 		obs_module_text("new_avatar_name"), OBS_TEXT_DEFAULT);
 	obs_properties_add_button2(lib, "save_as_new_btn",
@@ -680,7 +712,25 @@ obs_properties_t *flood_tuber_properties(void *data)
 	obs_properties_add_button2(lib, "open_folder_btn",
 		obs_module_text("open_folder_btn"), open_library_folder, data);
 
-	// ── 2. Avatar Images ───────────────────────────────────────────────────
+	// ── 2. Avatar Slots (1..10) for Hotkey Switching ───────────────────────
+	obs_properties_t *slots = obs_properties_create();
+	obs_properties_add_group(props, "slots_group",
+		obs_module_text("slots_group"), OBS_GROUP_NORMAL, slots);
+
+	for (int i = 1; i <= FLOOD_SLOT_COUNT; i++) {
+		char key[16], label[64];
+		snprintf(key, sizeof(key), "slot_%d", i);
+		snprintf(label, sizeof(label), "%s %d", obs_module_text("hotkey_slot"), i);
+		obs_properties_add_list(slots, key, label,
+			OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+	}
+
+	// Initial population of avatar_list and all 10 slot dropdowns
+	obs_data_t *cur = (tuber && tuber->source) ? obs_source_get_settings(tuber->source) : NULL;
+	fill_all_lists(props, cur);
+	if (cur) obs_data_release(cur);
+
+	// ── 3. Avatar Images ───────────────────────────────────────────────────
 	obs_properties_t *img = obs_properties_create();
 	obs_properties_add_group(props, "images_group",
 		obs_module_text("images_group"), OBS_GROUP_NORMAL, img);
@@ -713,7 +763,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 	add_file_prop(img, "path_talk_3_blink", obs_module_text("path_talk_3_blink"), obs_module_text("path_talk_3_blink_tooltip"));
 	obs_properties_add_button2(img, "clear_talk_3_blink", clear_txt, clear_talk_3_blink, data);
 
-	// ── 3. Audio & Trigger ─────────────────────────────────────────────────
+	// ── 4. Audio & Trigger ─────────────────────────────────────────────────
 	obs_properties_t *audio = obs_properties_create();
 	obs_properties_add_group(props, "audio_settings",
 		obs_module_text("audio_settings"), OBS_GROUP_NORMAL, audio);
@@ -722,6 +772,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 
 	obs_property_t *p_src = obs_properties_add_list(audio, "audio_source",
 		obs_module_text("audio_source"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+	obs_property_list_add_string(p_src, "", "");
 	obs_enum_sources(enum_audio_sources, p_src);
 
 	obs_property_t *p_thresh = obs_properties_add_float_slider(audio,
@@ -736,7 +787,10 @@ obs_properties_t *flood_tuber_properties(void *data)
 		"talking_speed", obs_module_text("talking_speed"), 0.01, 1.0, 0.01);
 	obs_property_set_long_description(p_spd, obs_module_text("talking_speed_tooltip"));
 
-	// ── 4. Blink Timings ───────────────────────────────────────────────────
+	obs_properties_add_bool(audio, "keep_audio_on_switch",
+		obs_module_text("keep_audio_on_switch"));
+
+	// ── 5. Blink Timings ───────────────────────────────────────────────────
 	obs_properties_t *blink = obs_properties_create();
 	obs_properties_add_group(props, "blink_settings",
 		obs_module_text("blink_settings"), OBS_GROUP_NORMAL, blink);
@@ -755,7 +809,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 		"blink_interval_max", obs_module_text("blink_interval_max"), 0, 600000, 100);
 	obs_property_set_long_description(p_bmax, obs_module_text("blink_interval_max_tooltip"));
 
-	// ── 5. Idle Action Timings ─────────────────────────────────────────────
+	// ── 6. Idle Action Timings ─────────────────────────────────────────────
 	obs_properties_t *action = obs_properties_create();
 	obs_properties_add_group(props, "action_settings",
 		obs_module_text("action_settings"), OBS_GROUP_NORMAL, action);
@@ -774,7 +828,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 		"action_interval_max", obs_module_text("action_interval_max"), 0, 3600000, 1000);
 	obs_property_set_long_description(p_amax, obs_module_text("action_interval_max_tooltip"));
 
-	// ── 6. Talking Motion ─────────────────────────────────────────────────
+	// ── 7. Talking Motion ─────────────────────────────────────────────────
 	obs_properties_t *motion = obs_properties_create();
 	obs_properties_add_group(props, "motion_settings",
 		obs_module_text("motion_settings"), OBS_GROUP_NORMAL, motion);
@@ -783,9 +837,10 @@ obs_properties_t *flood_tuber_properties(void *data)
 
 	obs_property_t *p_mtype = obs_properties_add_list(motion, "motion_type",
 		obs_module_text("motion_type"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
-	obs_property_list_add_string(p_mtype, "None",   "None");
-	obs_property_list_add_string(p_mtype, "Bounce", "Bounce");
-	obs_property_list_add_string(p_mtype, "Shake",  "Shake");
+	obs_property_list_add_string(p_mtype, "None",        "None");
+	obs_property_list_add_string(p_mtype, "Bounce",      "Bounce");
+	obs_property_list_add_string(p_mtype, "Shake",       "Shake");
+	obs_property_list_add_string(p_mtype, "Oscillating", "Oscillating");
 	obs_property_set_long_description(p_mtype, obs_module_text("motion_type_tooltip"));
 	obs_property_set_modified_callback(p_mtype, on_motion_type_changed);
 
@@ -799,16 +854,26 @@ obs_properties_t *flood_tuber_properties(void *data)
 
 	obs_properties_add_bool(motion, "mirror", obs_module_text("mirror_label"));
 
-	// Apply initial visibility for speed/strength based on current settings
+	obs_property_t *p_use_ref = obs_properties_add_bool(motion, "use_reference_height",
+		obs_module_text("use_reference_height"));
+	obs_property_set_long_description(p_use_ref, obs_module_text("use_reference_height_tooltip"));
+	obs_property_set_modified_callback(p_use_ref, on_use_reference_height_changed);
+
+	obs_property_t *p_ref = obs_properties_add_int(motion, "reference_height",
+		obs_module_text("reference_height"), 64, 4096, 1);
+	obs_property_set_long_description(p_ref, obs_module_text("reference_height_tooltip"));
+
+	// Apply initial visibility for speed/strength and reference_height based on current settings
 	if (tuber && tuber->source) {
 		obs_data_t *settings = obs_source_get_settings(tuber->source);
 		if (settings) {
-			on_motion_type_changed(motion, p_mtype, settings);
+			on_motion_type_changed(props, p_mtype, settings);
+			on_use_reference_height_changed(props, p_use_ref, settings);
 			obs_data_release(settings);
 		}
 	}
 
-	// ── 7. About ──────────────────────────────────────────────────────────
+	// ── 8. About ──────────────────────────────────────────────────────────
 	obs_properties_t *about = obs_properties_create();
 	obs_properties_add_group(props, "about_group",
 		obs_module_text("about_group"), OBS_GROUP_NORMAL, about);
