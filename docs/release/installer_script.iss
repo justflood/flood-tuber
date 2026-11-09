@@ -1,4 +1,4 @@
-﻿; Flood Tuber — Inno Setup Installer Script (OBS Studio 33+ ProgramData layout)
+; Flood Tuber — Inno Setup Installer Script (OBS Studio 33+ ProgramData layout)
 #define MyAppName "Flood Tuber"
 #ifndef MyAppVersion
   #define MyAppVersion "1.2.0"
@@ -43,20 +43,20 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 ; --- English ---
 english.info_title=About Flood Tuber
 english.info_subtitle=A free, open-source VTuber avatar plugin for OBS Studio (OBS 33+)
-english.info_body=Flood Tuber  v{#MyAppVersion}%nby justflood%n%nhttps://github.com/justflood/flood-tuber%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nYour avatar reacts to your microphone. When you speak it animates,%nwhen you go silent it returns to idle. That's the core idea.%n%nFEATURES%n  ·  Talking animation with up to 3 mouth frames  (A → B → C)%n  ·  Blink animation with randomized intervals%n  ·  Idle action animation  (e.g. sipping coffee)%n  ·  Talking motion effects:  Bounce  or  Shake%n  ·  Built-in Avatar Library with 7 ready-to-use avatars%n  ·  PNG, GIF, WebP, and Animated PNG (APNG) support%n  ·  Full English and Turkish localization%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nREQUIREMENT:  OBS Studio 33.0 or newer must be installed.%n(Previous legacy files in Program Files are cleaned up automatically.)%n%nAfter installation:%n  Open OBS Studio → Add Source → "Flood Tuber Avatar"
+english.info_body=Flood Tuber  v{#MyAppVersion}%nby justflood%n%nhttps://github.com/justflood/flood-tuber%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nYour avatar reacts to your microphone. When you speak it animates,%nwhen you go silent it returns to idle. That's the core idea.%n%nFEATURES%n  ·  Talking animation with up to 3 mouth frames  (A → B → C)%n  ·  Blink animation with randomized intervals%n  ·  Idle action animation  (e.g. sipping coffee)%n  ·  Talking motion effects:  Bounce  or  Shake%n  ·  Built-in Avatar Library with 7 ready-to-use avatars%n  ·  PNG, GIF, WebP, and Animated PNG (APNG) support%n  ·  Full English, Turkish, and French localization%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nREQUIREMENT:  OBS Studio 33.0 or newer must be installed.%n(Legacy custom avatars in Program Files are automatically migrated & backed up to ProgramData.)%n%nAfter installation:%n  Open OBS Studio → Add Source → "Flood Tuber Avatar"
 
 ; --- Turkish ---
 turkish.info_title=Flood Tuber Hakkında
 turkish.info_subtitle=OBS Studio için ücretsiz, açık kaynaklı bir VTuber avatar eklentisi (OBS 33+)
-turkish.info_body=Flood Tuber  v{#MyAppVersion}%njustflood tarafından%n%nhttps://github.com/justflood/flood-tuber%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nAvatarınız mikrofonunuza tepki verir. Konuştuğunuzda animasyon yapar,%nsessiz kaldığınızda boşta durumuna döner.%n%nÖZELLİKLER%n  ·  3 adede kadar ağız karesi ile konuşma animasyonu  (A → B → C)%n  ·  Rastgele aralıklı göz kırpma animasyonu%n  ·  Boşta aksiyon animasyonu  (örn: kahve içme)%n  ·  Konuşma hareket efektleri:  Zıplama  veya  Titreme%n  ·  7 kullanıma hazır avatar ile dahili Avatar Kütüphanesi%n  ·  PNG, GIF, WebP ve Animasyonlu PNG (APNG) desteği%n  ·  Tam İngilizce ve Türkçe lokalizasyon%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nGEREKSİNİM:  OBS Studio 33.0 veya üzeri kurulu olmalıdır.%n(Program Files içindeki eski sürüm dosyaları otomatik temizlenir.)%n%nKurulum sonrası:%n  OBS Studio'yu açın → Kaynak Ekle → "Flood Tuber Avatar"
+turkish.info_body=Flood Tuber  v{#MyAppVersion}%njustflood tarafından%n%nhttps://github.com/justflood/flood-tuber%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nAvatarınız mikrofonunuza tepki verir. Konuştuğunuzda animasyon yapar,%nsessiz kaldığınızda boşta durumuna döner.%n%nÖZELLİKLER%n  ·  3 adede kadar ağız karesi ile konuşma animasyonu  (A → B → C)%n  ·  Rastgele aralıklı göz kırpma animasyonu%n  ·  Boşta aksiyon animasyonu  (örn: kahve içme)%n  ·  Konuşma hareket efektleri:  Zıplama  veya  Titreme%n  ·  7 kullanıma hazır avatar ile dahili Avatar Kütüphanesi%n  ·  PNG, GIF, WebP ve Animasyonlu PNG (APNG) desteği%n  ·  Tam İngilizce, Türkçe ve Fransızca dil desteği%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nGEREKSİNİM:  OBS Studio 33.0 veya üzeri kurulu olmalıdır.%n(Program Files içindeki eski sürüm özel avatarlarınız otomatik olarak ProgramData klasörüne taşınır ve yedeklenir.)%n%nKurulum sonrası:%n  OBS Studio'yu açın → Kaynak Ekle → "Flood Tuber Avatar"
 
 [InstallDelete]
 ; Clean up legacy bin/64bit subfolder if present in ProgramData
 Type: filesandordirs; Name: "{app}\bin"
-; Clean up legacy v1.1.0 installation from OBS Studio Program Files folder
+; Clean up legacy v1.1.0 binary files from OBS Studio Program Files folder
+; Note: Legacy data/obs-plugins/flood-tuber is migrated and backed up in [Code] before deletion
 Type: files; Name: "{code:GetOBSDir}\obs-plugins\64bit\flood-tuber.dll"
 Type: files; Name: "{code:GetOBSDir}\obs-plugins\64bit\flood-tuber.pdb"
-Type: filesandordirs; Name: "{code:GetOBSDir}\data\obs-plugins\flood-tuber"
 
 [Files]
 ; Plugin DLL and data folder installed into C:\ProgramData\obs-studio\plugins\flood-tuber
@@ -91,4 +91,92 @@ begin
     Result := InstallPath
   else
     Result := ExpandConstant('{commonpf64}\obs-studio');
+end;
+
+// Recursively copies all files and subdirectories from SrcDir to DestDir
+function CopyDirRecursive(const SrcDir, DestDir: String): Boolean;
+var
+  FindRec: TFindRec;
+  SrcFilePath, DestFilePath: String;
+begin
+  Result := True;
+  if not ForceDirectories(DestDir) then
+  begin
+    Log('Failed to create directory: ' + DestDir);
+    Result := False;
+    Exit;
+  end;
+
+  if FindFirst(SrcDir + '\*', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
+        begin
+          SrcFilePath := SrcDir + '\' + FindRec.Name;
+          DestFilePath := DestDir + '\' + FindRec.Name;
+          if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+          begin
+            if not CopyDirRecursive(SrcFilePath, DestFilePath) then
+              Result := False;
+          end
+          else
+          begin
+            if not CopyFile(SrcFilePath, DestFilePath, False) then
+            begin
+              Log('Failed to copy file: ' + SrcFilePath + ' -> ' + DestFilePath);
+              Result := False;
+            end;
+          end;
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+end;
+
+// Migrates and backs up legacy v1.1.0 avatars from Program Files before cleaning up the legacy folder
+procedure MigrateAndCleanLegacyData;
+var
+  LegacyDataDir, LegacyAvatarsDir, NewAvatarsDir, BackupAvatarsDir: String;
+  BackupOk, MigrateOk: Boolean;
+begin
+  LegacyDataDir := GetOBSDir('') + '\data\obs-plugins\flood-tuber';
+  if not DirExists(LegacyDataDir) then
+    Exit;
+
+  LegacyAvatarsDir := LegacyDataDir + '\avatars';
+  if DirExists(LegacyAvatarsDir) then
+  begin
+    BackupAvatarsDir := ExpandConstant('{app}\backup_legacy_avatars');
+    NewAvatarsDir := ExpandConstant('{app}\data\avatars');
+
+    Log('Migrating legacy avatars from: ' + LegacyAvatarsDir);
+    BackupOk := CopyDirRecursive(LegacyAvatarsDir, BackupAvatarsDir);
+    MigrateOk := CopyDirRecursive(LegacyAvatarsDir, NewAvatarsDir);
+
+    if BackupOk and MigrateOk then
+    begin
+      Log('Legacy avatars successfully backed up and migrated. Cleaning up: ' + LegacyDataDir);
+      DelTree(LegacyDataDir, True, True, True);
+    end
+    else
+    begin
+      Log('Warning: Legacy avatar migration encountered an error; keeping legacy avatars folder safe.');
+      DelTree(LegacyDataDir + '\locale', True, True, True);
+    end;
+  end
+  else
+  begin
+    DelTree(LegacyDataDir, True, True, True);
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+  begin
+    MigrateAndCleanLegacyData;
+  end;
 end;
