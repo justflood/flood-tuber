@@ -95,6 +95,20 @@ Flood Tuber'ın en son sürümünü şuradan indirebilirsiniz:
 
 ## Kendi Avatarınızı Oluşturma
 
+### 🛠️ Kolay Yol: Flood Tuber Paket Oluşturucu (Web Aracı)
+Elle klasör oluşturma, katı dosya isimlendirme hataları veya hizalama kaymalarını önlemek için, topluluk geliştiricimiz **Mardios Lambda** ([@Poste2Travail](https://github.com/Poste2Travail) - Discord: `Mardios Lambda`) tarafından tamamen tarayıcıda çalışan pratik bir web aracı hazırlandı:
+
+👉 **[Flood Tuber Paket Oluşturucu'yu Aç](https://poste2travail.github.io/Flood-Artifacts/)** | [GitHub Deposu](https://github.com/Poste2Travail/Flood-Artifacts)
+
+* **Sürükle & Bırak Yuvaları:** PNG, GIF, APNG veya WebP sprite'larınızı ayrılmış yuvalara (`idle`, `talk`, `blink`, `action` vb.) bırakın.
+* **Canlı Hizalama & Fark Modu:** Katman önizlemesi ve fark modu sayesinde konuşma/göz kırpma karelerinin bekleme karesiyle piksel piksel hizalandığından emin olun.
+* **Konuşma Simülatörü:** Konuşma, göz kırpma ve bekleme animasyonlarını doğrudan tarayıcınızda canlı olarak test edin.
+* **Tek Tıkla Dışa Aktarma:** Doğru dosya adları ve `settings.ini` içeren kuruluma hazır bir `.zip` paketi indirin.
+
+---
+
+### 📁 Manuel Kurulum: Katı Dosya İsimlendirme Rehberi
+
 > **⚠️ ÖNEMLİ: KESİN DOSYA İSİMLENDİRMESİ**
 > Eklenti, sizin verdiğiniz özel dosya isimlerini ayarlara kaydetmez. Klasör içinde tam olarak aradığı sabit isimleri bulmak zorundadır. **Resim dosyalarınızı kesinlikle aşağıda gösterildiği gibi isimlendirmelisiniz**, aksi takdirde "Load & Apply" butonu çalışmaz ve eklenti başka bir avatara geçip döndüğünüzde dosyalarınızı "unutur".
 

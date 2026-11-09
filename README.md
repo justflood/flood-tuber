@@ -94,6 +94,20 @@ I offer two installation methods:
 
 ## Creating Your Own Avatar
 
+### 🛠️ Easy Way: Flood Tuber Package Builder (Web Tool)
+To avoid manual folder creation, strict file-naming mistakes, or alignment issues, community contributor **Mardios Lambda** ([@Poste2Travail](https://github.com/Poste2Travail) on GitHub / `Mardios Lambda` on Discord) built a lightweight, client-side web tool:
+
+👉 **[Launch Flood Tuber Package Builder](https://poste2travail.github.io/Flood-Artifacts/)** | [GitHub Repository](https://github.com/Poste2Travail/Flood-Artifacts)
+
+* **Drag & Drop Slots:** Drop your PNG, GIF, APNG, or WebP sprites into dedicated slots (`idle`, `talk`, `blink`, `action`, etc.).
+* **Live Alignment & Difference Mode:** Layer preview with difference blending to verify that talking and blinking frames align pixel-perfect with idle frames.
+* **Talking Simulator:** Test talking, blinking, and idle animations right in your browser.
+* **1-Click Export:** Generates and downloads a ready-to-import `.zip` package with correct file names and `settings.ini`.
+
+---
+
+### 📁 Manual Setup: Strict File Naming Guide
+
 > **⚠️ IMPORTANT: STRICT FILE NAMING**
 > The plugin does NOT save custom file names to the settings. It strictly looks for exact filenames in the folder. **You MUST name your image files exactly as shown below**, otherwise the "Load & Apply" button will not work, and the plugin will "forget" your files when switching avatars.
 
