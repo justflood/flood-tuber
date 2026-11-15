@@ -134,14 +134,14 @@ struct AvatarTransition {
 	float duration; // Total fade duration, in seconds
 };
 
-#define FLOOD_SLOT_COUNT 10
+#define FLOOD_SLOT_COUNT 20
 
 // Talking frames an avatar can have (A to F). A, B and C are the base set; D, E and F are optional extras.
 #define FLOOD_TALK_FRAME_COUNT 6
 
 struct flood_tuber_data;
 
-// Raccourci « emplacement » : retient son instance et son index (1..10)
+// Raccourci « emplacement » : retient son instance et son index (1..20)
 struct flood_slot_hotkey {
 	struct flood_tuber_data *tuber;
 	int index;

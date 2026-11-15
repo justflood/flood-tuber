@@ -621,7 +621,7 @@ static void switch_by_offset(struct flood_tuber_data *tuber, int offset)
 	switch_to_avatar(tuber, names[((idx + offset) % n + n) % n].c_str());
 }
 
-// Emplacement 1..10 : lit slot_N puis bascule. Emplacement vide = rien.
+// Emplacement 1..20 : lit slot_N puis bascule. Emplacement vide = rien.
 static void switch_to_slot(struct flood_tuber_data *tuber, int index)
 {
 	char key[16];
@@ -661,7 +661,7 @@ static void *flood_tuber_create(obs_data_t *settings, obs_source_t *source)
 	data->talking_frame_index = 0;
 	data->timer_release_hold = 0.0f;
 
-	// Raccourcis : suivant, précédent, puis emplacements 1..10
+	// Raccourcis : suivant, précédent, puis emplacements 1..20
 	data->hotkey_next = obs_hotkey_register_source(source, "flood_tuber.avatar_next",
 		obs_module_text("hotkey_avatar_next"), on_hotkey_next, data);
 	data->hotkey_prev = obs_hotkey_register_source(source, "flood_tuber.avatar_prev",

@@ -203,17 +203,18 @@ static void fill_avatar_list(obs_property_t *list, const std::vector<std::string
 		obs_property_list_add_string(list, n.c_str(), n.c_str());
 }
 
-// Fills avatar_list and the 10 slots. lib = the container that holds them.
-static void fill_all_lists(obs_properties_t *lib, obs_data_t *settings)
+// Fills avatar_list and the slot lists. props = the top-level properties:
+// obs_properties_get() also searches inside the groups.
+static void fill_all_lists(obs_properties_t *props, obs_data_t *settings)
 {
 	std::vector<std::string> names;
 	flood_tuber_list_avatars(settings, names);
 
-	fill_avatar_list(obs_properties_get(lib, "avatar_list"), names, false);
+	fill_avatar_list(obs_properties_get(props, "avatar_list"), names, false);
 	for (int i = 1; i <= FLOOD_SLOT_COUNT; i++) {
 		char key[16];
 		snprintf(key, sizeof(key), "slot_%d", i);
-		fill_avatar_list(obs_properties_get(lib, key), names, true);
+		fill_avatar_list(obs_properties_get(props, key), names, true);
 	}
 }
 
@@ -321,6 +322,7 @@ void flood_tuber_defaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, "reference_height", 512);
 	obs_data_set_default_bool(settings, "keep_audio_on_switch", false);
 	obs_data_set_default_bool(settings, "show_extra_frames", false);
+	obs_data_set_default_bool(settings, "show_slots", false);
 	// Avatar transition (crossfade between avatars)
 	obs_data_set_default_bool(settings, "avatar_fade_enabled", true);
 	obs_data_set_default_int(settings, "avatar_fade_duration", 300);
@@ -681,6 +683,25 @@ static bool on_motion_type_changed(obs_properties_t *props, obs_property_t *p,
 	return true;
 }
 
+// Shows or hides the "Avatar slots" group, following the "show_slots" box.
+// The 20 lists stay out of the way for users who only switch avatars from the library.
+static bool on_show_slots_changed(obs_properties_t *props, obs_property_t *p, obs_data_t *settings)
+{
+	(void)p;
+	bool show = obs_data_get_bool(settings, "show_slots");
+	if (!obs_data_has_user_value(settings, "show_slots")) {
+		// Box never touched: show the group if a slot is already assigned
+		for (int i = 1; i <= FLOOD_SLOT_COUNT && !show; i++) {
+			char key[16];
+			snprintf(key, sizeof(key), "slot_%d", i);
+			const char *name = obs_data_get_string(settings, key);
+			if (name && *name) show = true;
+		}
+	}
+	obs_property_set_visible(obs_properties_get(props, "slots_group"), show);
+	return true;
+}
+
 // Shows or hides the extra talking frames (D, E, F), following the "show_extra_frames" box.
 // Most avatars only have A, B, C and the image list is long enough without them.
 static bool on_show_extra_frames_changed(obs_properties_t *props, obs_property_t *p,
@@ -746,8 +767,6 @@ obs_properties_t *flood_tuber_properties(void *data)
 	obs_properties_t *props = obs_properties_create();
 
 	// ── 1. Avatar Library ───────────────────
-	// avatar_list, emplacements, boutons et chemin sont dans le même conteneur (lib) :
-	// les callbacks reçoivent ce conteneur et ne voient pas les sous-groupes.
 	obs_properties_t *lib = obs_properties_create();
 	obs_properties_add_group(props, "library_group",
 		obs_module_text("library_group"), OBS_GROUP_NORMAL, lib);
@@ -761,14 +780,10 @@ obs_properties_t *flood_tuber_properties(void *data)
 	obs_properties_add_button2(lib, "save_settings_btn",
 		obs_module_text("save_settings_btn"), save_settings_to_avatar, data);
 
-	// Emplacements 1..10 : chaque liste désigne un avatar
-	for (int i = 1; i <= FLOOD_SLOT_COUNT; i++) {
-		char key[16], label[64];
-		snprintf(key, sizeof(key), "slot_%d", i);
-		snprintf(label, sizeof(label), "%s %d", obs_module_text("hotkey_slot"), i);
-		obs_properties_add_list(lib, key, label,
-			OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
-	}
+	// Shows or hides the "Avatar slots" group below
+	obs_property_t *p_show_slots = obs_properties_add_bool(lib, "show_slots",
+		obs_module_text("show_slots"));
+	obs_property_set_modified_callback(p_show_slots, on_show_slots_changed);
 
 	// Dossier personnalisé
 	obs_properties_add_text(lib, "hint_custom_folder", NULL, OBS_TEXT_INFO);
@@ -786,9 +801,23 @@ obs_properties_t *flood_tuber_properties(void *data)
 	obs_properties_add_button2(lib, "open_folder_btn",
 		obs_module_text("open_folder_btn"), open_library_folder, data);
 
+	// ── 1a. Avatar Slots ───────────────────────────────────────────────────
+	// One list per slot hotkey (1..20): each one names the avatar that hotkey switches to
+	obs_properties_t *slots = obs_properties_create();
+	obs_properties_add_group(props, "slots_group",
+		obs_module_text("slots_group"), OBS_GROUP_NORMAL, slots);
+
+	for (int i = 1; i <= FLOOD_SLOT_COUNT; i++) {
+		char key[16], label[64];
+		snprintf(key, sizeof(key), "slot_%d", i);
+		snprintf(label, sizeof(label), "%s %d", obs_module_text("hotkey_slot"), i);
+		obs_properties_add_list(slots, key, label,
+			OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+	}
+
 	// Remplissage initial de toutes les listes
 	obs_data_t *cur = (tuber && tuber->source) ? obs_source_get_settings(tuber->source) : NULL;
-	fill_all_lists(lib, cur);
+	fill_all_lists(props, cur);
 	if (cur) obs_data_release(cur);
 
 	// ── 1b. Avatar Transition ──────────────────────────────────────────────
@@ -976,6 +1005,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 		if (settings) {
 			on_motion_type_changed(motion, p_mtype, settings);
 			on_show_extra_frames_changed(props, p_extra, settings);
+			on_show_slots_changed(props, p_show_slots, settings);
 			obs_data_release(settings);
 		}
 	}
