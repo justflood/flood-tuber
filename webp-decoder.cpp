@@ -92,9 +92,8 @@ bool WebPDecoder::DecodeData(const uint8_t* data, size_t size) {
 
     int prev_timestamp = 0;
     
-    // We must decode ALL frames to get correct blending
-    obs_enter_graphics();
-    
+    // We must decode ALL frames to get correct blending.
+    // The decoding runs without the graphics lock; only each texture upload takes it.
     while (WebPAnimDecoderHasMoreFrames(dec)) {
         uint8_t* buf;
         int timestamp;
@@ -103,7 +102,9 @@ bool WebPDecoder::DecodeData(const uint8_t* data, size_t size) {
         }
 
         // Create texture for this frame
+        obs_enter_graphics();
         gs_texture_t* tex = gs_texture_create(width, height, GS_RGBA, 1, (const uint8_t**)&buf, GS_DYNAMIC);
+        obs_leave_graphics();
         if (!tex) {
             BLOG(LOG_WARNING, "Failed to create texture for frame");
             continue;
@@ -118,7 +119,6 @@ bool WebPDecoder::DecodeData(const uint8_t* data, size_t size) {
         prev_timestamp = timestamp;
     }
 
-    obs_leave_graphics();
     WebPAnimDecoderDelete(dec);
 
     total_duration = prev_timestamp;

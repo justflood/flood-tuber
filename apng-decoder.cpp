@@ -70,39 +70,15 @@ bool APNGDecoder::Load(const char* path) {
     Free();
 
     std::vector<unsigned char> file_data;
-    unsigned error = 0;
     if (!read_file_utf8(path, file_data)) {
         BLOG(LOG_WARNING, "Failed to read file %s", path);
         return false;
     }
 
-    if (!ParseChunks(file_data)) {
-        // Fallback: Try loading as standard static PNG
-        BLOG(LOG_INFO, "Not an APNG, loading as static PNG: %s", path);
-        
-        std::vector<unsigned char> image;
-        unsigned w, h;
-        error = lodepng::decode(image, w, h, file_data);
-        if (error) return false;
-
-        width = w;
-        height = h;
-
-        APNGFrame frame;
-        frame.delay_ms = 1000;
-        
-        obs_enter_graphics();
-        const uint8_t* data_ptr = image.data();
-        frame.texture = gs_texture_create(w, h, GS_RGBA, 1, &data_ptr, GS_DYNAMIC);
-        obs_leave_graphics();
-        
-        if (frame.texture) {
-             gs_texture_set_image(frame.texture, image.data(), w * 4, false); // safety
-             frames.push_back(frame);
-             return true;
-        }
+    // Not an APNG (or not a usable one): the caller loads the file as a plain image.
+    // ParseChunks() finds that out from the chunk list, before decoding anything.
+    if (!ParseChunks(file_data))
         return false;
-    }
 
     return !frames.empty();
 }
@@ -210,8 +186,8 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
     
     total_duration_ms = 0;
 
-    obs_enter_graphics();
-
+    // The frames are decoded and composed without the graphics lock, so OBS keeps rendering.
+    // Only each texture upload takes it.
     for (const auto& info : frame_infos) {
         // A frame must have a size and lie inside the canvas (APNG rule). Anything else is a
         // corrupt file, and would make the PNG decoder allocate an absurd amount of memory.
@@ -346,7 +322,9 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
             if (frame.delay_ms == 0) frame.delay_ms = 100; // Default min delay
 
             const uint8_t* data_ptr = canvas.data();
+            obs_enter_graphics();
             frame.texture = gs_texture_create(width, height, GS_RGBA, 1, &data_ptr, GS_DYNAMIC);
+            obs_leave_graphics();
             frames.push_back(frame);
             total_duration_ms += frame.delay_ms;
 
@@ -366,8 +344,7 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
             }
         }
     }
-    
-    obs_leave_graphics();
+
     return true;
 }
 

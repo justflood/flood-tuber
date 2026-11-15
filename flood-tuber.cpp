@@ -2,6 +2,7 @@
 #include "flood-tuber-props.h"
 #include <util/dstr.h>
 #include <util/platform.h>
+#include <sys/stat.h>
 #include <math.h>
 #include <cstdio>
 #include <string>
@@ -73,99 +74,147 @@ static FileFormat detect_file_format(const char *path) {
     return FileFormat::OTHER; // Let OBS try other formats (BMP, TGA etc) if not explicitly suspicious
 }
 
-// Loads an image file and initializes its texture
-static void update_image(FloodImage *image, const char *path)
+// Loads an image file into 'image'. 'image' must be one that nothing else uses yet (a local
+// variable): the decoding runs without the graphics lock, so OBS keeps rendering meanwhile.
+// Only the texture uploads take the lock, briefly.
+static void load_image(FloodImage *image, const char *path)
 {
-	obs_enter_graphics();
-	image->Free();
+    if (!path || !*path)
+        return;
 
-    if (path && *path) {
-        // The decoder follows the file content, not its extension
-        FileFormat format = detect_file_format(path);
-        if (format == FileFormat::INVALID) {
-            blog(LOG_WARNING, "Invalid file signature (corrupt or fake file?): %s", path);
-        } else {
-            const char *ext = strrchr(path, '.');
-
-            if (format == FileFormat::WEBP) {
-                image->type = FloodImage::CUSTOM_WEBP;
-                image->webp_decoder = new WebPDecoder();
-                if (!image->webp_decoder->Load(path)) {
-                     blog(LOG_WARNING, "Failed to load WebP: %s", path);
-                     image->Free();
-                } else {
-                     blog(LOG_INFO, "Loaded WebP: %s", path);
-                }
-            } else if (format == FileFormat::PNG) {
-                // Check if it's an animated PNG
-                APNGDecoder *temp_decoder = new APNGDecoder();
-                if (temp_decoder->Load(path) && temp_decoder->IsAnimated()) {
-                     image->type = FloodImage::CUSTOM_APNG;
-                     image->apng_decoder = temp_decoder;
-                     blog(LOG_INFO, "Loaded Animated PNG: %s", path);
-                } else {
-                     if (temp_decoder->IsAnimated())
-                         blog(LOG_WARNING, "Failed to load APNG (corrupt?): %s", path);
-
-                     // Clean up checks
-                     delete temp_decoder;
-
-                     // Fallback to standard OBS loader for static PNGs or if APNG load failed
-                     image->type = FloodImage::OBS_STANDARD;
-                     flood_image_file_init(&image->obs_image, path);
-                     flood_image_file_init_texture(&image->obs_image);
-                }
-            } else {
-                // The OBS loader only animates a GIF when the file name ends with ".gif"
-                if (format == FileFormat::GIF && !(ext && STRCMPI(ext, ".gif") == 0))
-                    BLOG(LOG_WARNING, "GIF saved under another extension, it will not animate (rename it to .gif): %s", path);
-
-                image->type = FloodImage::OBS_STANDARD;
-                flood_image_file_init(&image->obs_image, path);
-                flood_image_file_init_texture(&image->obs_image);
-            }
-        }
+    // The decoder follows the file content, not its extension
+    FileFormat format = detect_file_format(path);
+    if (format == FileFormat::INVALID) {
+        BLOG(LOG_WARNING, "Invalid file signature (corrupt or fake file?): %s", path);
+        return;
     }
-    image->anim_time_ns = 0;
-	obs_leave_graphics();
+
+    if (format == FileFormat::WEBP) {
+        image->type = FloodImage::CUSTOM_WEBP;
+        image->webp_decoder = new WebPDecoder();
+        if (!image->webp_decoder->Load(path)) {
+            BLOG(LOG_WARNING, "Failed to load WebP: %s", path);
+            image->Free();
+        } else {
+            BLOG(LOG_INFO, "Loaded WebP: %s", path);
+        }
+        return;
+    }
+
+    if (format == FileFormat::PNG) {
+        // Animated PNGs go to the APNG decoder. For a plain PNG it returns false right after
+        // reading the chunk list, without decoding anything: the OBS loader below takes it.
+        APNGDecoder *decoder = new APNGDecoder();
+        if (decoder->Load(path) && decoder->IsAnimated()) {
+            image->type = FloodImage::CUSTOM_APNG;
+            image->apng_decoder = decoder;
+            BLOG(LOG_INFO, "Loaded Animated PNG: %s", path);
+            return;
+        }
+        delete decoder;
+    }
+
+    // The OBS loader only animates a GIF when the file name ends with ".gif"
+    const char *ext = strrchr(path, '.');
+    if (format == FileFormat::GIF && !(ext && STRCMPI(ext, ".gif") == 0))
+        BLOG(LOG_WARNING, "GIF saved under another extension, it will not animate (rename it to .gif): %s", path);
+
+    image->type = FloodImage::OBS_STANDARD;
+    flood_image_file_init(&image->obs_image, path); // decodes the file, no graphics call
+    obs_enter_graphics();
+    flood_image_file_init_texture(&image->obs_image);
+    obs_leave_graphics();
 }
 
-// Loads an image from a setting key; if the stored path was a built-in avatar
-// in a legacy installation directory that no longer exists, resolves it via obs_module_file.
-static void update_image_setting(FloodImage *image, obs_data_t *settings, const char *setting_key)
+// Returns the image path stored under a setting key. If it points to a built-in avatar of an old
+// installation folder that no longer exists, the path is resolved again via obs_module_file
+// and the setting is corrected.
+static std::string resolve_image_path(obs_data_t *settings, const char *setting_key)
 {
 	const char *path = obs_data_get_string(settings, setting_key);
-	if (path && *path && !os_file_exists(path)) {
-		struct dstr norm = {0};
-		dstr_copy(&norm, path);
-		dstr_replace(&norm, "\\", "/");
+	if (!path || !*path)
+		return std::string();
+	if (os_file_exists(path))
+		return path;
 
-		const char *marker = "/avatars/";
-		const char *found = NULL;
-		const char *search = norm.array;
-		while ((search = strstr(search, marker)) != NULL) {
-			found = search;
-			search += strlen(marker);
-		}
+	std::string result = path;
 
-		if (found) {
-			const char *rel_path = found + 1; // "avatars/<AvatarName>/<file>"
-			char *new_path = obs_module_file(rel_path);
-			if (new_path && os_file_exists(new_path)) {
-				BLOG(LOG_INFO, "Migrated legacy avatar path '%s' -> '%s'", path, new_path);
-				obs_data_set_string(settings, setting_key, new_path);
-				update_image(image, new_path);
-				bfree(new_path);
-				dstr_free(&norm);
-				return;
-			}
-			if (new_path)
-				bfree(new_path);
-		}
-		dstr_free(&norm);
+	struct dstr norm = {0};
+	dstr_copy(&norm, path);
+	dstr_replace(&norm, "\\", "/");
+
+	const char *marker = "/avatars/";
+	const char *found = NULL;
+	const char *search = norm.array;
+	while ((search = strstr(search, marker)) != NULL) {
+		found = search;
+		search += strlen(marker);
 	}
-	update_image(image, path);
+
+	if (found) {
+		const char *rel_path = found + 1; // "avatars/<AvatarName>/<file>"
+		char *new_path = obs_module_file(rel_path);
+		if (new_path && os_file_exists(new_path)) {
+			BLOG(LOG_INFO, "Migrated legacy avatar path '%s' -> '%s'", path, new_path);
+			result = new_path;
+			obs_data_set_string(settings, setting_key, new_path); // 'path' is no longer valid after this
+		}
+		if (new_path)
+			bfree(new_path);
+	}
+	dstr_free(&norm);
+	return result;
 }
+
+// Identity of an image file: its path, size and modification date. It changes when the user picks
+// another file or overwrites the same one. 0 means "no file".
+static uint64_t image_file_signature(const std::string &path)
+{
+	if (path.empty())
+		return 0;
+
+	uint64_t hash = 1469598103934665603ULL; // FNV-1a, 64 bits
+	auto mix = [&hash](uint64_t value) {
+		for (int i = 0; i < 8; i++) {
+			hash ^= (value >> (i * 8)) & 0xFFULL;
+			hash *= 1099511628211ULL;
+		}
+	};
+	for (unsigned char c : path) {
+		hash ^= (uint64_t)c;
+		hash *= 1099511628211ULL;
+	}
+
+	struct stat st;
+	if (os_stat(path.c_str(), &st) == 0) {
+		mix((uint64_t)st.st_size);
+		mix((uint64_t)st.st_mtime);
+	}
+	return hash ? hash : 1;
+}
+
+// Every image of an avatar, with the setting that holds its path
+static const struct {
+	FloodImage AvatarImages::*image;
+	const char *key;
+} AVATAR_IMAGE_SETTINGS[] = {
+	{&AvatarImages::image_idle,            "path_idle"},
+	{&AvatarImages::image_blink,           "path_blink"},
+	{&AvatarImages::image_action,          "path_action"},
+	{&AvatarImages::image_talking_1,       "path_talk_1"},
+	{&AvatarImages::image_talking_2,       "path_talk_2"},
+	{&AvatarImages::image_talking_3,       "path_talk_3"},
+	{&AvatarImages::image_talking_4,       "path_talk_4"},
+	{&AvatarImages::image_talking_5,       "path_talk_5"},
+	{&AvatarImages::image_talking_6,       "path_talk_6"},
+	{&AvatarImages::image_talking_1_blink, "path_talk_1_blink"},
+	{&AvatarImages::image_talking_2_blink, "path_talk_2_blink"},
+	{&AvatarImages::image_talking_3_blink, "path_talk_3_blink"},
+	{&AvatarImages::image_talking_4_blink, "path_talk_4_blink"},
+	{&AvatarImages::image_talking_5_blink, "path_talk_5_blink"},
+	{&AvatarImages::image_talking_6_blink, "path_talk_6_blink"},
+};
+#define AVATAR_IMAGE_SETTING_COUNT (sizeof(AVATAR_IMAGE_SETTINGS) / sizeof(AVATAR_IMAGE_SETTINGS[0]))
 
 static void flood_image_tick(FloodImage *img, uint64_t elapsed_ns) {
     if (img->type == FloodImage::CUSTOM_WEBP) {
@@ -336,12 +385,33 @@ static bool ensure_fade_effect(struct flood_tuber_data *data)
 
 static bool capture_fade_snapshot(struct flood_tuber_data *data);
 
-// Called from flood_tuber_update() when the avatar changes, in the graphics context.
+// Refreshes the cached facts about the displayed avatar. Runs in the graphics context,
+// right after its images were replaced.
+static void refresh_avatar_info(struct flood_tuber_data *data)
+{
+	data->has_blink_image = flood_image_get_texture(&data->cur.image_blink) != nullptr;
+	data->idle_width = flood_image_get_width(&data->cur.image_idle);
+	data->idle_height = flood_image_get_height(&data->cur.image_idle);
+
+	// The talking cycle runs from frame A to the last extra frame that is set, and never over
+	// fewer than A, B, C: avatars without extra frames keep the rhythm they always had.
+	FloodImage *const extra_frames[] = {
+		&data->cur.image_talking_4, &data->cur.image_talking_5, &data->cur.image_talking_6,
+	};
+	data->talk_frame_count = 3;
+	for (int i = 0; i < 3; i++) {
+		if (flood_image_get_texture(extra_frames[i]))
+			data->talk_frame_count = 4 + i;
+	}
+}
+
+// Called from flood_tuber_update() when the avatar changes, in the graphics context,
+// just before the freshly loaded images are swapped into 'cur'.
 // Outgoing side of the new fade:
 // - no fade running: the displayed avatar moves to 'prev' so its textures stay alive during the fade;
 // - a fade is running: the blend on screen is frozen into fade_snapshot, so the new fade starts
 //   from what is visible instead of jumping to the target of the interrupted fade.
-// Then 'cur' is reloaded with the new avatar. The latest request wins.
+// The latest request wins.
 static void begin_avatar_fade(struct flood_tuber_data *data, bool fade)
 {
 	bool frozen = false;
@@ -355,7 +425,7 @@ static void begin_avatar_fade(struct flood_tuber_data *data, bool fade)
 	if (!fade || !ensure_fade_effect(data))
 		return;
 
-	// Frozen: 'cur' still holds the avatar of the interrupted fade, it is reloaded right after
+	// Frozen: 'cur' still holds the avatar of the interrupted fade, it is replaced right after
 	if (!frozen)
 		std::swap(data->prev, data->cur);
 	data->transition.elapsed = 0.0f;
@@ -777,38 +847,38 @@ static void flood_tuber_update(void *data_ptr, obs_data_t *settings)
 	data->avatar_hash = avatar_hash;
 	data->avatar_ready = true;
 
-	if (avatar_changed || (!data->fade_enabled && data->transition.active)) {
-		obs_enter_graphics();
-		begin_avatar_fade(data, avatar_changed && data->fade_enabled && data->fade_duration > 0.0f);
-		obs_leave_graphics();
+	bool start_fade = avatar_changed && data->fade_enabled && data->fade_duration > 0.0f;
+	bool stop_fade = !data->fade_enabled && data->transition.active;
+
+	// 1. Decode the images whose file changed, without the graphics lock: OBS keeps rendering
+	//    the current avatar meanwhile. A fade moves the displayed avatar to 'prev', so the
+	//    new one is loaded in full.
+	FloodImage fresh[AVATAR_IMAGE_SETTING_COUNT];
+	bool replace[AVATAR_IMAGE_SETTING_COUNT];
+	for (size_t i = 0; i < AVATAR_IMAGE_SETTING_COUNT; i++) {
+		std::string path = resolve_image_path(settings, AVATAR_IMAGE_SETTINGS[i].key);
+		uint64_t sig = image_file_signature(path);
+
+		replace[i] = start_fade || sig != (data->cur.*AVATAR_IMAGE_SETTINGS[i].image).source_sig;
+		if (replace[i]) {
+			load_image(&fresh[i], path.c_str());
+			fresh[i].source_sig = sig; // also when the load failed: no retry until the file changes
+		}
 	}
 
-	update_image_setting(&data->cur.image_idle, settings, "path_idle");
-	update_image_setting(&data->cur.image_blink, settings, "path_blink");
-	update_image_setting(&data->cur.image_action, settings, "path_action");
-	update_image_setting(&data->cur.image_talking_1, settings, "path_talk_1");
-	update_image_setting(&data->cur.image_talking_2, settings, "path_talk_2");
-	update_image_setting(&data->cur.image_talking_3, settings, "path_talk_3");
-	update_image_setting(&data->cur.image_talking_1_blink, settings, "path_talk_1_blink");
-	update_image_setting(&data->cur.image_talking_2_blink, settings, "path_talk_2_blink");
-	update_image_setting(&data->cur.image_talking_3_blink, settings, "path_talk_3_blink");
-	update_image_setting(&data->cur.image_talking_4, settings, "path_talk_4");
-	update_image_setting(&data->cur.image_talking_5, settings, "path_talk_5");
-	update_image_setting(&data->cur.image_talking_6, settings, "path_talk_6");
-	update_image_setting(&data->cur.image_talking_4_blink, settings, "path_talk_4_blink");
-	update_image_setting(&data->cur.image_talking_5_blink, settings, "path_talk_5_blink");
-	update_image_setting(&data->cur.image_talking_6_blink, settings, "path_talk_6_blink");
-
-	// The talking cycle runs from frame A to the last extra frame that is set, and never over
-	// fewer than A, B, C: avatars without extra frames keep the rhythm they always had.
-	FloodImage *const extra_frames[] = {
-		&data->cur.image_talking_4, &data->cur.image_talking_5, &data->cur.image_talking_6,
-	};
-	data->talk_frame_count = 3;
-	for (int i = 0; i < 3; i++) {
-		if (flood_image_get_texture(extra_frames[i]))
-			data->talk_frame_count = 4 + i;
+	// 2. Swap them in under the lock, all at once: the render thread never sees an avatar
+	//    that is only half loaded. The images they replace are released here too.
+	obs_enter_graphics();
+	if (avatar_changed || stop_fade)
+		begin_avatar_fade(data, start_fade);
+	for (size_t i = 0; i < AVATAR_IMAGE_SETTING_COUNT; i++) {
+		if (!replace[i])
+			continue;
+		std::swap(data->cur.*AVATAR_IMAGE_SETTINGS[i].image, fresh[i]);
+		fresh[i].Free();
 	}
+	refresh_avatar_info(data);
+	obs_leave_graphics();
 
 	data->threshold = (float)obs_data_get_double(settings, "threshold");
 	data->release_delay = (float)obs_data_get_int(settings, "release_delay") / 1000.0f; // ms to seconds
@@ -961,7 +1031,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 		}
 	}
 
-	if (flood_image_get_texture(&data->cur.image_blink)) {
+	if (data->has_blink_image) {
 		data->timer_blink += seconds;
 
 		if (!data->is_blinking_now && data->timer_blink >= data->time_until_next_blink) {
@@ -1020,8 +1090,8 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 static void flood_tuber_reference_size(struct flood_tuber_data *data, uint32_t *w, uint32_t *h)
 {
 	uint32_t ref_h = data->reference_height ? data->reference_height : 512;
-	uint32_t iw = flood_image_get_width(&data->cur.image_idle);
-	uint32_t ih = flood_image_get_height(&data->cur.image_idle);
+	uint32_t iw = data->idle_width;
+	uint32_t ih = data->idle_height;
 	float aspect = (iw && ih) ? (float)iw / (float)ih : 1.0f;
 
 	*h = ref_h;

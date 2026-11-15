@@ -66,6 +66,10 @@ struct FloodImage {
     // Animation state for custom decoders
     uint64_t anim_time_ns = 0;
 
+    // Identity of the file this image was loaded from (path, size, date); 0 = nothing loaded.
+    // An update skips the images whose file did not change.
+    uint64_t source_sig = 0;
+
     FloodImage() {
         type = OBS_STANDARD;
         flood_image_file_init(&obs_image, NULL);
@@ -83,6 +87,7 @@ struct FloodImage {
         }
         flood_image_file_free(&obs_image);
         type = OBS_STANDARD;
+        source_sig = 0;
     }
 };
 
@@ -162,6 +167,13 @@ struct flood_tuber_data {
 	AvatarImages cur;             // Avatar being displayed
 	AvatarImages prev;            // Outgoing avatar, kept alive during a fade
 	AvatarTransition transition;  // Fade state
+
+	// -- Facts about the displayed avatar, refreshed together with it under the graphics lock.
+	//    The tick and the size callbacks read these instead of touching the images, which
+	//    another thread may be replacing. --
+	bool has_blink_image;         // The avatar has a blink image
+	uint32_t idle_width;          // Size of the idle image, in pixels
+	uint32_t idle_height;
 
 	// -- User Configuration --
 	float threshold;           // Audio dB threshold to trigger talking state
