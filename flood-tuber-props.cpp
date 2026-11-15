@@ -271,6 +271,17 @@ bool apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, boo
 
 	config_t *config = NULL;
 	if (config_open(&config, ini_path.array, CONFIG_OPEN_EXISTING) == CONFIG_SUCCESS) {
+		// The avatar comes with its own settings.ini: the mirror and motion values it does not set
+		// go back to the defaults instead of being inherited from the avatar shown before.
+		// (An avatar without a settings.ini leaves the current settings untouched.)
+		if (!as_default) {
+			static const char *const look_keys[] = {
+				"mirror", "motion_type", "motion_speed", "motion_strength",
+			};
+			for (size_t i = 0; i < sizeof(look_keys) / sizeof(look_keys[0]); i++)
+				obs_data_unset_user_value(settings, look_keys[i]);
+		}
+
 		auto load_dbl = [&](const char *s, const char *n, const char *k) {
 			if (config_has_user_value(config, s, n))
 				set_dbl(k, config_get_double(config, s, n));
