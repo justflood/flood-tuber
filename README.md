@@ -105,6 +105,7 @@ I offer two installation methods:
     *   `blink.png`
     *   `action.png`
     *   *(Optional)* `talk_a_blink.png` etc. for blinking while talking.
+    *   The names are fixed, but the extension can be `.png`, `.apng`, `.gif` or `.webp` (for example `idle.gif`). If the same image exists in several formats, `.png` is used first.
 4.  *(Optional)* Copy a `settings.ini` from another avatar to fine-tune default settings for this character.
 5.  In OBS, select your new folder from the list and click Load!
 

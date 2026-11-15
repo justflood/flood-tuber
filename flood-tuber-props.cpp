@@ -41,6 +41,65 @@ static void os_open_url_or_path(const char *target)
 }
 
 
+// Image formats an avatar folder may use, in lookup order.
+// ".png" comes first, so avatars made before other formats were accepted load exactly as before.
+static const char *const AVATAR_IMAGE_EXTS[] = {".png", ".apng", ".gif", ".webp"};
+static const size_t AVATAR_IMAGE_EXT_COUNT = sizeof(AVATAR_IMAGE_EXTS) / sizeof(AVATAR_IMAGE_EXTS[0]);
+
+// The image slots of an avatar: settings key and file name without extension
+static const struct {
+	const char *key;
+	const char *stem;
+} AVATAR_IMAGES[] = {
+	{"path_idle",         "idle"},
+	{"path_blink",        "blink"},
+	{"path_action",       "action"},
+	{"path_talk_1",       "talk_a"},
+	{"path_talk_2",       "talk_b"},
+	{"path_talk_3",       "talk_c"},
+	{"path_talk_1_blink", "talk_a_blink"},
+	{"path_talk_2_blink", "talk_b_blink"},
+	{"path_talk_3_blink", "talk_c_blink"},
+};
+static const size_t AVATAR_IMAGE_COUNT = sizeof(AVATAR_IMAGES) / sizeof(AVATAR_IMAGES[0]);
+
+// Returns "<dir>/<stem><ext>" for the first supported extension that exists, or "" if there is none
+static std::string find_avatar_image(const char *dir, const char *stem)
+{
+	for (size_t i = 0; i < AVATAR_IMAGE_EXT_COUNT; i++) {
+		std::string path = std::string(dir) + "/" + stem + AVATAR_IMAGE_EXTS[i];
+		if (os_file_exists(path.c_str()))
+			return path;
+	}
+	return std::string();
+}
+
+// Extension an image keeps when it is copied into an avatar folder: its own when the format
+// is one of AVATAR_IMAGE_EXTS (so a GIF stays a GIF and keeps its animation), ".png" otherwise.
+static const char *avatar_image_ext(const char *path)
+{
+	const char *dot = strrchr(path, '.');
+	if (dot) {
+		for (size_t i = 0; i < AVATAR_IMAGE_EXT_COUNT; i++)
+			if (astrcmpi(dot, AVATAR_IMAGE_EXTS[i]) == 0)
+				return AVATAR_IMAGE_EXTS[i];
+	}
+	return AVATAR_IMAGE_EXTS[0];
+}
+
+// True when both paths name the same file (slash direction ignored; case ignored on Windows)
+static bool same_file_path(const std::string &a, const std::string &b)
+{
+	std::string x = a, y = b;
+	for (char &c : x) if (c == '\\') c = '/';
+	for (char &c : y) if (c == '\\') c = '/';
+#ifdef _WIN32
+	return astrcmpi(x.c_str(), y.c_str()) == 0;
+#else
+	return x == y;
+#endif
+}
+
 // Returns the custom avatars folder path from source settings.
 // Returns NULL if not set. Do NOT free the returned pointer.
 static const char *get_custom_dir(obs_data_t *settings)
@@ -62,12 +121,8 @@ static char *resolve_avatar_dir(const char *avatar_name, obs_data_t *settings)
 		dstr_cat(&user_path, "/");
 		dstr_cat(&user_path, avatar_name);
 
-		// Only use custom dir if it has actual image files
-		struct dstr idle_check = {0};
-		dstr_copy(&idle_check, user_path.array);
-		dstr_cat(&idle_check, "/idle.png");
-		bool has_images = os_file_exists(idle_check.array);
-		dstr_free(&idle_check);
+		// Only use custom dir if it has an idle image, in any supported format
+		bool has_images = !find_avatar_image(user_path.array, "idle").empty();
 
 		if (has_images) {
 			BLOG(LOG_DEBUG, "resolve: found custom avatar: %s", user_path.array);
@@ -189,24 +244,9 @@ bool apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, boo
 		if (as_default) obs_data_set_default_double(settings, key, val);
 		else obs_data_set_double(settings, key, val);
 	};
-	auto set_img = [&](const char *key, const char *file) {
-		struct dstr final_path = {0};
-		dstr_copy(&final_path, base_dir);
-		dstr_cat(&final_path, "/");
-		dstr_cat(&final_path, file);
-		set_str(key, os_file_exists(final_path.array) ? final_path.array : "");
-		dstr_free(&final_path);
-	};
-
-	set_img("path_idle",         "idle.png");
-	set_img("path_blink",        "blink.png");
-	set_img("path_action",       "action.png");
-	set_img("path_talk_1",       "talk_a.png");
-	set_img("path_talk_2",       "talk_b.png");
-	set_img("path_talk_3",       "talk_c.png");
-	set_img("path_talk_1_blink", "talk_a_blink.png");
-	set_img("path_talk_2_blink", "talk_b_blink.png");
-	set_img("path_talk_3_blink", "talk_c_blink.png");
+	// Each image is looked up under every supported extension; a missing image gives an empty path
+	for (size_t i = 0; i < AVATAR_IMAGE_COUNT; i++)
+		set_str(AVATAR_IMAGES[i].key, find_avatar_image(base_dir, AVATAR_IMAGES[i].stem).c_str());
 
 	struct dstr ini_path = {0};
 	dstr_copy(&ini_path, base_dir);
@@ -400,6 +440,30 @@ static bool copy_file_safe(const char *src, const char *dst)
 	return true;
 }
 
+// Copies one image into an avatar folder as "<stem><ext>", keeping the format of the source.
+// Returns true when the image is in place.
+static bool copy_avatar_image(const char *src, const char *dst_dir, const char *stem)
+{
+	if (!src || !*src || !os_file_exists(src)) return false;
+
+	const char *ext = avatar_image_ext(src);
+	std::string dst = std::string(dst_dir) + "/" + stem + ext;
+
+	// Already there: copying a file onto itself would empty it
+	if (same_file_path(src, dst)) return true;
+
+	if (!copy_file_safe(src, dst.c_str())) return false;
+
+	// Remove a copy of this image left in another format: the lookup would find it first
+	for (size_t i = 0; i < AVATAR_IMAGE_EXT_COUNT; i++) {
+		if (strcmp(AVATAR_IMAGE_EXTS[i], ext) == 0) continue;
+		std::string old = std::string(dst_dir) + "/" + stem + AVATAR_IMAGE_EXTS[i];
+		if (!same_file_path(src, old) && os_file_exists(old.c_str()))
+			os_unlink(old.c_str());
+	}
+	return true;
+}
+
 // Saves current settings to the selected avatar's settings.ini
 static bool save_settings_to_avatar(obs_properties_t *props, obs_property_t *p, void *data)
 {
@@ -439,23 +503,10 @@ static bool save_settings_to_avatar(obs_properties_t *props, obs_property_t *p, 
 		// If source is from data dir (built-in), copy images to custom dir
 		if (strcmp(source_dir, target_dir.array) != 0) {
 			BLOG(LOG_INFO, "save_settings: copying images from %s to %s", source_dir, target_dir.array);
-			const char *files[] = {
-				"idle.png", "blink.png", "action.png",
-				"talk_a.png", "talk_b.png", "talk_c.png",
-				"talk_a_blink.png", "talk_b_blink.png", "talk_c_blink.png",
-				NULL
-			};
-			for (int i = 0; files[i]; i++) {
-				struct dstr src = {0}, dst = {0};
-				dstr_copy(&src, source_dir);
-				dstr_cat(&src, "/");
-				dstr_cat(&src, files[i]);
-				dstr_copy(&dst, target_dir.array);
-				dstr_cat(&dst, "/");
-				dstr_cat(&dst, files[i]);
-				copy_file_safe(src.array, dst.array);
-				dstr_free(&src);
-				dstr_free(&dst);
+			for (size_t i = 0; i < AVATAR_IMAGE_COUNT; i++) {
+				std::string src = find_avatar_image(source_dir, AVATAR_IMAGES[i].stem);
+				if (!src.empty())
+					copy_avatar_image(src.c_str(), target_dir.array, AVATAR_IMAGES[i].stem);
 			}
 		}
 	} else {
@@ -508,33 +559,15 @@ static bool save_as_new_avatar(obs_properties_t *props, obs_property_t *p, void 
 	dstr_cat(&avatar_dir, new_name);
 	os_mkdirs(avatar_dir.array);
 
-	// Copy current images to the new avatar folder
-	struct { const char *key; const char *filename; } img_map[] = {
-		{"path_idle",         "idle.png"},
-		{"path_blink",        "blink.png"},
-		{"path_action",       "action.png"},
-		{"path_talk_1",       "talk_a.png"},
-		{"path_talk_2",       "talk_b.png"},
-		{"path_talk_3",       "talk_c.png"},
-		{"path_talk_1_blink", "talk_a_blink.png"},
-		{"path_talk_2_blink", "talk_b_blink.png"},
-		{"path_talk_3_blink", "talk_c_blink.png"},
-		{NULL, NULL}
-	};
-
-	for (int i = 0; img_map[i].key; i++) {
-		const char *src = obs_data_get_string(settings, img_map[i].key);
+	// Copy current images to the new avatar folder, each in its own format (GIF, WebP, APNG or PNG)
+	for (size_t i = 0; i < AVATAR_IMAGE_COUNT; i++) {
+		const char *src = obs_data_get_string(settings, AVATAR_IMAGES[i].key);
 		if (!src || !*src) continue;
 
-		struct dstr dst = {0};
-		dstr_copy(&dst, avatar_dir.array);
-		dstr_cat(&dst, "/");
-		dstr_cat(&dst, img_map[i].filename);
-		if (copy_file_safe(src, dst.array))
-			BLOG(LOG_DEBUG, "save_as_new: copied %s", img_map[i].filename);
+		if (copy_avatar_image(src, avatar_dir.array, AVATAR_IMAGES[i].stem))
+			BLOG(LOG_DEBUG, "save_as_new: copied %s%s", AVATAR_IMAGES[i].stem, avatar_image_ext(src));
 		else
-			BLOG(LOG_WARNING, "save_as_new: failed to copy %s", img_map[i].filename);
-		dstr_free(&dst);
+			BLOG(LOG_WARNING, "save_as_new: failed to copy %s", AVATAR_IMAGES[i].stem);
 	}
 
 	// Save settings.ini, select the new avatar, and clear the name input
