@@ -146,7 +146,7 @@ struct AvatarTransition {
 
 struct flood_tuber_data;
 
-// Raccourci « emplacement » : retient son instance et son index (1..20)
+// Slot hotkey: remembers its source instance and its index (1..20)
 struct flood_slot_hotkey {
 	struct flood_tuber_data *tuber;
 	int index;

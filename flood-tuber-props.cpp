@@ -224,7 +224,7 @@ static void fill_all_lists(obs_properties_t *props, obs_data_t *settings)
 	}
 }
 
-// “Refresh” button: reads the current source settings
+// "Refresh" button: reads the current source settings
 static bool refresh_avatar_lists(obs_properties_t *props, obs_property_t *p, void *data)
 {
 	(void)p;
@@ -234,7 +234,7 @@ static bool refresh_avatar_lists(obs_properties_t *props, obs_property_t *p, voi
 	obs_data_t *settings = obs_source_get_settings(tuber->source);
 	fill_all_lists(props, settings);
 	obs_data_release(settings);
-	return true; // redessine les propriétés
+	return true; // redraw the properties
 }
 
 // Load avatar images and settings.ini into an obs_data_t object.
@@ -673,7 +673,7 @@ static bool save_as_new_avatar(obs_properties_t *props, obs_property_t *p, void 
 	// Save settings.ini, select the new avatar, and clear the name input
 	write_settings_ini(avatar_dir.array, settings);
 
-	// Recharge avatar_list et les emplacements (le dossier existe déjà)
+	// Reload avatar_list and the slots (the folder now exists)
 	fill_all_lists(props, settings);
 
 	obs_data_set_string(settings, "avatar_list", new_name);
@@ -870,7 +870,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 		obs_module_text("show_slots"));
 	obs_property_set_modified_callback(p_show_slots, on_show_slots_changed);
 
-	// Dossier personnalisé
+	// Custom folder
 	obs_properties_add_text(lib, "hint_custom_folder", NULL, OBS_TEXT_INFO);
 	obs_property_t *folder_prop = obs_properties_add_path(lib, "custom_avatars_path",
 		obs_module_text("custom_avatars_path"), OBS_PATH_DIRECTORY, NULL, NULL);
@@ -878,7 +878,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 	obs_properties_add_button2(lib, "clear_custom_folder_btn",
 		obs_module_text("clear_custom_folder"), clear_custom_folder, data);
 
-	// Nouvel avatar
+	// New avatar
 	obs_properties_add_text(lib, "new_avatar_name",
 		obs_module_text("new_avatar_name"), OBS_TEXT_DEFAULT);
 	obs_properties_add_button2(lib, "save_as_new_btn",
@@ -900,7 +900,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 			OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
 	}
 
-	// Remplissage initial de toutes les listes
+	// Initial fill of every list
 	obs_data_t *cur = (tuber && tuber->source) ? obs_source_get_settings(tuber->source) : NULL;
 	fill_all_lists(props, cur);
 	if (cur) obs_data_release(cur);

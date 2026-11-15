@@ -224,12 +224,6 @@ static void flood_image_tick(FloodImage *img, uint64_t elapsed_ns) {
     } else if (img->type == FloodImage::CUSTOM_APNG) {
         if (img->apng_decoder) {
             img->anim_time_ns += elapsed_ns;
-            // Trace animation time occasionally (approx every 1s at 60fps)
-            static int log_counter = 0;
-            if (++log_counter > 60) {
-                 // BLOG(LOG_DEBUG, "APNG Tick: Time=%llu ms", img->anim_time_ns / 1000000);
-                 log_counter = 0;
-            }
         }
     } else {
         flood_image_file_tick(&img->obs_image, elapsed_ns);
@@ -637,10 +631,9 @@ static void audio_callback(void *data_ptr, obs_source_t *source, const struct au
 
 
 
-// Plugin Init: Allocates memory and initializes the plugin state
-// ── Raccourcis : changement d'avatar ─────────────────────────────────────
+// ── Hotkeys: avatar switching ────────────────────────────────────────────
 
-// Copie les réglages audio d'un jeu de settings vers un autre
+// Copies the audio settings from one settings object to another
 static void copy_audio_keys(obs_data_t *from, obs_data_t *to)
 {
 	obs_data_set_string(to, "audio_source",  obs_data_get_string(from, "audio_source"));
@@ -651,8 +644,8 @@ static void copy_audio_keys(obs_data_t *from, obs_data_t *to)
 	obs_data_set_int(to,    "mouth_range",   obs_data_get_int(from, "mouth_range"));
 }
 
-// Chemin unique de changement d'avatar : bouton Charger, cycle, emplacements.
-// Si le dossier de l'avatar est introuvable, rien n'est modifié.
+// Single entry point for every avatar change: Load button, next/previous, slots.
+// If the avatar folder cannot be found, nothing is modified.
 bool switch_to_avatar(struct flood_tuber_data *tuber, const char *name)
 {
 	obs_data_t *settings = obs_source_get_settings(tuber->source);
@@ -660,7 +653,7 @@ bool switch_to_avatar(struct flood_tuber_data *tuber, const char *name)
 	copy_audio_keys(settings, audio);
 
 	if (!apply_avatar_to_settings(settings, name, false)) {
-		BLOG(LOG_WARNING, "Avatar introuvable, changement annulé : %s", name);
+		BLOG(LOG_WARNING, "Avatar not found, switch cancelled: %s", name);
 		obs_data_release(audio);
 		obs_data_release(settings);
 		return false;
@@ -676,7 +669,7 @@ bool switch_to_avatar(struct flood_tuber_data *tuber, const char *name)
 	return true;
 }
 
-// Avatar suivant (+1) ou précédent (-1), dans l'ordre de la liste
+// Next (+1) or previous (-1) avatar, in list order
 static void switch_by_offset(struct flood_tuber_data *tuber, int offset)
 {
 	obs_data_t *settings = obs_source_get_settings(tuber->source);
@@ -695,7 +688,7 @@ static void switch_by_offset(struct flood_tuber_data *tuber, int offset)
 	switch_to_avatar(tuber, names[((idx + offset) % n + n) % n].c_str());
 }
 
-// Emplacement 1..20 : lit slot_N puis bascule. Emplacement vide = rien.
+// Slot 1..20: reads slot_N, then switches. An empty slot does nothing.
 static void switch_to_slot(struct flood_tuber_data *tuber, int index)
 {
 	char key[16];
@@ -746,6 +739,7 @@ static void on_source_renamed(void *param, calldata_t *cd)
 	snprintf(data->audio_source_name, sizeof(data->audio_source_name), "%s", new_name);
 }
 
+// Plugin Init: Allocates memory and initializes the plugin state
 static void *flood_tuber_create(obs_data_t *settings, obs_source_t *source)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)bzalloc(sizeof(struct flood_tuber_data));
@@ -757,7 +751,7 @@ static void *flood_tuber_create(obs_data_t *settings, obs_source_t *source)
 	data->timer_release_hold = 0.0f;
 	data->rng_state = (uint32_t)(os_gettime_ns() ^ (uint64_t)(uintptr_t)data);
 
-	// Raccourcis : suivant, précédent, puis emplacements 1..20
+	// Hotkeys: next, previous, then slots 1..20
 	data->hotkey_next = obs_hotkey_register_source(source, "flood_tuber.avatar_next",
 		obs_module_text("hotkey_avatar_next"), on_hotkey_next, data);
 	data->hotkey_prev = obs_hotkey_register_source(source, "flood_tuber.avatar_prev",
@@ -1087,7 +1081,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 		// The phase keeps running while the motion dies down, so it does not jump when it restarts
 		data->timer_effect += seconds * data->effect_speed;
 
-		// Amplitude en % de la hauteur de référence : indépendante de la résolution des PNG
+		// Amplitude as a % of the reference height: independent of the image resolution
 		float amp = data->effect_strength * 0.01f * (float)data->reference_height * data->effect_weight;
 
 		if (data->talk_effect == TalkingEffect::BOUNCE) {
@@ -1100,7 +1094,7 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 			data->offset_y = (cosf(data->timer_effect * 20.0f) + 0.5f * sinf(data->timer_effect * 31.0f + 0.7f)) * amp * 0.5f * wobble;
 		}
 		else if (data->talk_effect == TalkingEffect::OSCILLATING) {
-			// Dérive douce en huit : x suit une sinusoïde, y une sinusoïde deux fois plus rapide
+			// Smooth figure-eight drift: x follows a sine, y a sine twice as fast
 			data->offset_x = sinf(data->timer_effect * 3.0f) * amp;
 			data->offset_y = sinf(data->timer_effect * 6.0f) * amp * 0.5f;
 		}
@@ -1110,8 +1104,8 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 	}
 }
 
-// Boîte commune d'affichage : hauteur réglée par l'utilisateur, largeur selon le ratio
-// de l'image au repos. Seul le ratio compte, jamais la taille en pixels.
+// Common display box: height set by the user, width from the aspect ratio of the idle image.
+// Only the ratio matters, never the size in pixels.
 static void flood_tuber_reference_size(struct flood_tuber_data *data, uint32_t *w, uint32_t *h)
 {
 	uint32_t ref_h = data->reference_height ? data->reference_height : 512;
