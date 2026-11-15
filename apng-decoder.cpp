@@ -5,6 +5,11 @@
 
 #define BLOG(level, format, ...) blog(level, "[APNG-Decoder] " format, ##__VA_ARGS__)
 
+// Limits that keep a corrupt or hostile file from exhausting memory.
+// Every frame is stored as a full-size RGBA texture.
+static const uint64_t APNG_MAX_CANVAS_BYTES  = 256ULL * 1024 * 1024;  // one frame (8192 x 8192)
+static const uint64_t APNG_MAX_DECODED_BYTES = 1024ULL * 1024 * 1024; // all frames together
+
 // Helper to read big-endian integers
 static uint32_t read_u32(const unsigned char* p) {
     return (p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
@@ -82,7 +87,7 @@ bool APNGDecoder::Load(const char* path) {
 }
 
 bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
-    if (source.size() < 29) return false; // Too small
+    if (source.size() < 33) return false; // Too small: signature (8) + IHDR chunk (25)
     
     // Check Signature
     if (source[0] != 137 || source[1] != 80 || source[2] != 78) return false;
@@ -90,6 +95,8 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
     // Read IHDR
     width = read_u32(&source[16]);
     height = read_u32(&source[20]);
+    if (width == 0 || height == 0 || (uint64_t)width * height * 4 > APNG_MAX_CANVAS_BYTES)
+        return false;
 
     std::vector<APNGFrameInfo> frame_infos;
     APNGFrameInfo current_info;
@@ -102,7 +109,14 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
     while (pos < source.size()) {
         if (pos + 8 > source.size()) break;
         uint32_t len = read_u32(&source[pos]);
-        
+
+        // The chunk (length + type + data + CRC) must fit in the file. If it does not, the file
+        // is truncated or corrupt: stop here instead of reading past the end of the buffer.
+        if ((uint64_t)pos + 12 + len > source.size()) {
+            BLOG(LOG_WARNING, "PNG chunk runs past the end of the file, parsing stopped");
+            break;
+        }
+
         const unsigned char* chunk_data = &source[pos + 8];
         uint32_t type = read_u32(&source[pos + 4]);
 
@@ -113,11 +127,14 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
         BLOG(LOG_DEBUG, "Chunk: %s, Len: %u", type_str, len);
 
         if (type == 0x6163544C) { // acTL
+            if (len < 8) { pos += 12 + (size_t)len; continue; } // too short to be valid
             is_apng = true;
             num_plays = read_u32(chunk_data + 4);
             BLOG(LOG_INFO, "Found acTL (APNG)! NumPlays: %u", num_plays);
         }
         else if (type == 0x6663544C) { // fcTL
+            if (len < 26) { pos += 12 + (size_t)len; continue; } // too short to be valid
+
             // Finish previous frame info if valid
             if (!current_info.compressed_data.empty()) {
                 frame_infos.push_back(current_info);
@@ -168,13 +185,22 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
     if (!is_apng) return false;
 
     // Now decode all collected frames
-    std::vector<unsigned char> canvas(width * height * 4, 0);       // Current full canvas
+    std::vector<unsigned char> canvas((size_t)width * height * 4, 0); // Current full canvas
     
     total_duration_ms = 0;
 
     obs_enter_graphics();
 
     for (const auto& info : frame_infos) {
+        // A frame must have a size and lie inside the canvas (APNG rule). Anything else is a
+        // corrupt file, and would make the PNG decoder allocate an absurd amount of memory.
+        if (info.width == 0 || info.height == 0 ||
+            (uint64_t)info.x_offset + info.width > width ||
+            (uint64_t)info.y_offset + info.height > height) {
+            BLOG(LOG_WARNING, "APNG frame outside the canvas, skipped");
+            continue;
+        }
+
         // Construct PNG
         std::vector<unsigned char> png_data;
         // Signature
@@ -287,6 +313,10 @@ bool APNGDecoder::ParseChunks(const std::vector<unsigned char>& source) {
             }
 
             // 3. Create Texture
+            if ((uint64_t)(frames.size() + 1) * width * height * 4 > APNG_MAX_DECODED_BYTES) {
+                BLOG(LOG_WARNING, "APNG too large, only the first %u frames are kept", (unsigned)frames.size());
+                break;
+            }
             APNGFrame frame;
             float num = (float)info.delay_num;
             float den = (float)info.delay_den;
