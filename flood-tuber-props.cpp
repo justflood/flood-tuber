@@ -553,6 +553,25 @@ static bool save_settings_to_avatar(obs_properties_t *props, obs_property_t *p, 
 	return true;
 }
 
+// Turns what the user typed into a safe folder name: no path separators, no characters Windows
+// refuses, no leading or trailing spaces or dots (a leading dot would also hide the avatar from
+// the list). Returns "" when nothing usable is left.
+static std::string sanitize_avatar_name(const char *raw)
+{
+	std::string name;
+	for (const char *c = raw; c && *c; c++) {
+		unsigned char ch = (unsigned char)*c;
+		if (ch < 0x20 || ch == 0x7F) continue;
+		if (ch < 0x80 && strchr("\\/:*?\"<>|", *c)) continue;
+		name += *c;
+	}
+
+	size_t first = name.find_first_not_of(" .");
+	if (first == std::string::npos) return std::string();
+	size_t last = name.find_last_not_of(" .");
+	return name.substr(first, last - first + 1);
+}
+
 // Saves current config as a brand new avatar in the custom directory
 static bool save_as_new_avatar(obs_properties_t *props, obs_property_t *p, void *data)
 {
@@ -570,8 +589,14 @@ static bool save_as_new_avatar(obs_properties_t *props, obs_property_t *p, void 
 		return false;
 	}
 
-	// Copy name string since we'll modify settings before using it
-	char *new_name = bstrdup(raw_name);
+	// Folder-safe copy of the name (the settings are modified before it is used)
+	std::string clean_name = sanitize_avatar_name(raw_name);
+	if (clean_name.empty()) {
+		BLOG(LOG_WARNING, "save_as_new: '%s' is not a usable avatar name", raw_name);
+		obs_data_release(settings);
+		return false;
+	}
+	char *new_name = bstrdup(clean_name.c_str());
 
 	const char *custom = get_custom_dir(settings);
 	if (!custom) {
@@ -579,6 +604,29 @@ static bool save_as_new_avatar(obs_properties_t *props, obs_property_t *p, void 
 		bfree(new_name);
 		obs_data_release(settings);
 		return false;
+	}
+
+	// Never write over another avatar. If the folder already exists and is not the avatar being
+	// edited, the new one gets a numbered name instead: "Name (2)", "Name (3)"...
+	const char *selected = obs_data_get_string(settings, "avatar_list");
+	if (!(selected && same_file_path(selected, new_name))) {
+		std::string base = new_name;
+		std::string candidate = base;
+		int number = 1;
+		while (os_file_exists((std::string(custom) + "/" + candidate).c_str())) {
+			if (++number > 99) {
+				BLOG(LOG_WARNING, "save_as_new: too many avatars named '%s'", base.c_str());
+				bfree(new_name);
+				obs_data_release(settings);
+				return false;
+			}
+			candidate = base + " (" + std::to_string(number) + ")";
+		}
+		if (candidate != base) {
+			BLOG(LOG_INFO, "save_as_new: '%s' already exists, saving as '%s'", base.c_str(), candidate.c_str());
+			bfree(new_name);
+			new_name = bstrdup(candidate.c_str());
+		}
 	}
 
 	BLOG(LOG_INFO, "save_as_new: saving '%s' to '%s'", new_name, custom);
