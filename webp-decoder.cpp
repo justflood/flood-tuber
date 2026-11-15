@@ -1,10 +1,32 @@
 #include "webp-decoder.h"
-#include <fstream>
+#include <cstdio>
 #include <vector>
+#include <util/platform.h>
 #include <webp/decode.h>
 #include <webp/demux.h>
 
 #define BLOG(level, format, ...) blog(level, "[WebP-Decoder] " format, ##__VA_ARGS__)
+
+// Reads a whole file into memory. os_fopen() takes UTF-8 paths on every platform, while
+// std::ifstream and fopen() fail on Windows as soon as a folder name has an accent.
+static bool read_file_utf8(const char *path, std::vector<unsigned char> &out)
+{
+    FILE *f = os_fopen(path, "rb");
+    if (!f) return false;
+
+    os_fseeki64(f, 0, SEEK_END);
+    int64_t size = os_ftelli64(f);
+    os_fseeki64(f, 0, SEEK_SET);
+
+    bool ok = size > 0;
+    if (ok) {
+        out.resize((size_t)size);
+        ok = fread(out.data(), 1, (size_t)size, f) == (size_t)size;
+    }
+    fclose(f);
+    if (!ok) out.clear();
+    return ok;
+}
 
 WebPDecoder::WebPDecoder() {}
 
@@ -30,23 +52,13 @@ void WebPDecoder::VerifyFree() {
 bool WebPDecoder::Load(const char* path) {
     VerifyFree();
 
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        BLOG(LOG_WARNING, "Failed to open file: %s", path);
+    std::vector<unsigned char> buffer;
+    if (!read_file_utf8(path, buffer)) {
+        BLOG(LOG_WARNING, "Failed to read file: %s", path);
         return false;
     }
 
-    std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
-
-    if (size <= 0) return false;
-
-    std::vector<uint8_t> buffer(size);
-    if (!file.read((char*)buffer.data(), size)) {
-        return false;
-    }
-
-    return DecodeData(buffer.data(), (size_t)size);
+    return DecodeData(buffer.data(), buffer.size());
 }
 
 bool WebPDecoder::DecodeData(const uint8_t* data, size_t size) {

@@ -30,7 +30,8 @@ enum class FileFormat {
 static FileFormat detect_file_format(const char *path) {
     if (!path || !*path) return FileFormat::INVALID;
 
-    FILE *f = fopen(path, "rb");
+    // os_fopen() takes UTF-8 paths on every platform; plain fopen() does not on Windows
+    FILE *f = os_fopen(path, "rb");
     if (!f) return FileFormat::INVALID;
 
     unsigned char sig[12] = {0};

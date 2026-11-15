@@ -10,6 +10,27 @@
 static const uint64_t APNG_MAX_CANVAS_BYTES  = 256ULL * 1024 * 1024;  // one frame (8192 x 8192)
 static const uint64_t APNG_MAX_DECODED_BYTES = 1024ULL * 1024 * 1024; // all frames together
 
+// Reads a whole file into memory. os_fopen() takes UTF-8 paths on every platform, while
+// std::ifstream and fopen() fail on Windows as soon as a folder name has an accent.
+static bool read_file_utf8(const char *path, std::vector<unsigned char> &out)
+{
+    FILE *f = os_fopen(path, "rb");
+    if (!f) return false;
+
+    os_fseeki64(f, 0, SEEK_END);
+    int64_t size = os_ftelli64(f);
+    os_fseeki64(f, 0, SEEK_SET);
+
+    bool ok = size > 0;
+    if (ok) {
+        out.resize((size_t)size);
+        ok = fread(out.data(), 1, (size_t)size, f) == (size_t)size;
+    }
+    fclose(f);
+    if (!ok) out.clear();
+    return ok;
+}
+
 // Helper to read big-endian integers
 static uint32_t read_u32(const unsigned char* p) {
     return (p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
@@ -49,9 +70,9 @@ bool APNGDecoder::Load(const char* path) {
     Free();
 
     std::vector<unsigned char> file_data;
-    unsigned error = lodepng::load_file(file_data, path);
-    if (error) {
-        BLOG(LOG_WARNING, "Failed to load file %s: %s", path, lodepng_error_text(error));
+    unsigned error = 0;
+    if (!read_file_utf8(path, file_data)) {
+        BLOG(LOG_WARNING, "Failed to read file %s", path);
         return false;
     }
 

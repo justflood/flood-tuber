@@ -22,7 +22,13 @@ static void os_open_url_or_path(const char *target)
 {
 	if (!target || !*target) return;
 #if defined(_WIN32)
-	ShellExecuteA(NULL, "open", target, NULL, NULL, SW_SHOWNORMAL);
+	// Wide-character call: the ANSI one mangles UTF-8 paths (accents, non-Latin names)
+	wchar_t *wide = NULL;
+	os_utf8_to_wcs_ptr(target, 0, &wide);
+	if (wide) {
+		ShellExecuteW(NULL, L"open", wide, NULL, NULL, SW_SHOWNORMAL);
+		bfree(wide);
+	}
 #elif defined(__APPLE__)
 	pid_t pid;
 	char *argv[] = {(char *)"open", (char *)target, NULL};
@@ -454,20 +460,25 @@ static bool copy_file_safe(const char *src, const char *dst)
 {
 	if (!src || !*src || !os_file_exists(src)) return false;
 
-	FILE *in = fopen(src, "rb");
+	// os_fopen() takes UTF-8 paths on every platform; plain fopen() fails on Windows
+	// as soon as a folder name has an accent
+	FILE *in = os_fopen(src, "rb");
 	if (!in) return false;
 
-	FILE *out = fopen(dst, "wb");
+	FILE *out = os_fopen(dst, "wb");
 	if (!out) { fclose(in); return false; }
 
+	bool ok = true;
 	char buf[8192];
 	size_t n;
-	while ((n = fread(buf, 1, sizeof(buf), in)) > 0)
-		fwrite(buf, 1, n, out);
+	while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
+		if (fwrite(buf, 1, n, out) != n) { ok = false; break; } // disk full, for instance
+	}
 
 	fclose(in);
-	fclose(out);
-	return true;
+	if (fclose(out) != 0) ok = false;
+	if (!ok) os_unlink(dst); // do not leave a truncated image behind
+	return ok;
 }
 
 // Copies one image into an avatar folder as "<stem><ext>", keeping the format of the source.
