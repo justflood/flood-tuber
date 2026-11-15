@@ -596,8 +596,9 @@ static void draw_avatar_crossfade(struct flood_tuber_data *data, gs_texture_t *t
 	gs_effect_set_vec4(p_rb, &vec_b);
 	gs_effect_set_float(p_t, t);
 
+	// On screen, the blend state of the caller is kept, exactly as obs_source_draw() does for a
+	// plain avatar: the fade and the frames around it are composited the same way.
 	gs_blend_state_push();
-	gs_reset_blend_state();
 	if (to_texture)
 		gs_blend_function_separate(GS_BLEND_ONE, GS_BLEND_ZERO, GS_BLEND_ONE, GS_BLEND_ZERO);
 	while (gs_effect_loop(effect, "Draw"))
@@ -1130,6 +1131,9 @@ static bool capture_fade_snapshot(struct flood_tuber_data *data)
 }
 
 // Render: draws the current avatar. While a fade runs, the outgoing and the new avatar are blended.
+// The source is OBS_SOURCE_CUSTOM_DRAW: OBS calls this with no effect active, and each branch
+// runs its own. The fade shader could not run inside the default effect OBS would otherwise
+// wrap around this call, and filters now always get the finished picture, fade included.
 static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)data_ptr;
@@ -1161,7 +1165,9 @@ static void flood_tuber_render(void *data_ptr, gs_effect_t *effect)
 		draw_avatar_crossfade(data, tex_old, tex, ref_w, ref_h, false);
 	} else if (tex) {
 		FloodFitRect r = fit_in_reference_box(tex, ref_w, ref_h);
-		obs_source_draw(tex, r.x, r.y, (uint32_t)r.w, (uint32_t)r.h, false);
+		gs_effect_t *draw_effect = obs_get_base_effect(OBS_EFFECT_DEFAULT);
+		while (gs_effect_loop(draw_effect, "Draw"))
+			obs_source_draw(tex, r.x, r.y, (uint32_t)r.w, (uint32_t)r.h, false);
 	}
 
 	gs_matrix_pop();
@@ -1198,7 +1204,7 @@ bool obs_module_load(void)
 {
 	flood_tuber_info.id = "flood_tuber_source";
 	flood_tuber_info.type = OBS_SOURCE_TYPE_INPUT;
-	flood_tuber_info.output_flags = OBS_SOURCE_VIDEO;
+	flood_tuber_info.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_CUSTOM_DRAW;
 	flood_tuber_info.get_name = flood_tuber_get_name;
 	flood_tuber_info.create = flood_tuber_create;
 	flood_tuber_info.destroy = flood_tuber_destroy;
