@@ -725,6 +725,27 @@ static void on_hotkey_slot(void *data, obs_hotkey_id, obs_hotkey_t *, bool press
 	if (pressed) switch_to_slot(hk->tuber, hk->index);
 }
 
+// The mic is stored by name. When that source is renamed in OBS, the setting follows, so the
+// avatar still finds its mic the next time OBS starts. The capture itself stays attached.
+static void on_source_renamed(void *param, calldata_t *cd)
+{
+	struct flood_tuber_data *data = (struct flood_tuber_data *)param;
+	const char *new_name = calldata_string(cd, "new_name");
+	const char *prev_name = calldata_string(cd, "prev_name");
+
+	if (!new_name || !prev_name || !data->audio_source_name[0])
+		return;
+	if (strcmp(prev_name, data->audio_source_name) != 0)
+		return;
+
+	obs_data_t *settings = obs_source_get_settings(data->source);
+	obs_data_set_string(settings, "audio_source", new_name);
+	obs_data_release(settings);
+
+	BLOG(LOG_INFO, "Audio source renamed: '%s' -> '%s'", prev_name, new_name);
+	snprintf(data->audio_source_name, sizeof(data->audio_source_name), "%s", new_name);
+}
+
 static void *flood_tuber_create(obs_data_t *settings, obs_source_t *source)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)bzalloc(sizeof(struct flood_tuber_data));
@@ -752,6 +773,8 @@ static void *flood_tuber_create(obs_data_t *settings, obs_source_t *source)
 		snprintf(desc, sizeof(desc), "%s %d", obs_module_text("hotkey_slot"), hk->index);
 		hk->id = obs_hotkey_register_source(source, name, desc, on_hotkey_slot, hk);
 	}
+
+	signal_handler_connect(obs_get_signal_handler(), "source_rename", on_source_renamed, data);
 
 	obs_source_update(source, settings);
 	return data;
@@ -808,6 +831,7 @@ static void flood_tuber_destroy(void *d)
 {
 	struct flood_tuber_data *data = (struct flood_tuber_data *)d;
 
+	signal_handler_disconnect(obs_get_signal_handler(), "source_rename", on_source_renamed, data);
 	flood_tuber_remove_audio_capture(data);
 	obs_enter_graphics();
 		data->cur.Free();
