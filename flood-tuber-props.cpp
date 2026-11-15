@@ -1056,10 +1056,11 @@ obs_properties_t *flood_tuber_properties(void *data)
 
 	obs_property_t *p_mtype = obs_properties_add_list(motion, "motion_type",
 		obs_module_text("motion_type"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
-	obs_property_list_add_string(p_mtype, "None",   "None");
-	obs_property_list_add_string(p_mtype, "Bounce", "Bounce");
-	obs_property_list_add_string(p_mtype, "Shake",  "Shake");
-	obs_property_list_add_string(p_mtype, "Oscillating", "Oscillating");
+	// Translated labels; the stored values stay in English (settings.ini, saved scenes)
+	obs_property_list_add_string(p_mtype, obs_module_text("motion_none"),        "None");
+	obs_property_list_add_string(p_mtype, obs_module_text("motion_bounce"),      "Bounce");
+	obs_property_list_add_string(p_mtype, obs_module_text("motion_shake"),       "Shake");
+	obs_property_list_add_string(p_mtype, obs_module_text("motion_oscillating"), "Oscillating");
 	obs_property_set_long_description(p_mtype, obs_module_text("motion_type_tooltip"));
 	obs_property_set_modified_callback(p_mtype, on_motion_type_changed);
 

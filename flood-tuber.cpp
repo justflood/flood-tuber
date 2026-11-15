@@ -1190,7 +1190,7 @@ static uint32_t flood_tuber_get_height(void *data_ptr)
 static const char *flood_tuber_get_name(void *unused)
 {
 	UNUSED_PARAMETER(unused);
-	return "Flood Tuber Avatar";
+	return obs_module_text("flood_tuber_source");
 }
 
 
