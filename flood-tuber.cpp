@@ -575,6 +575,8 @@ static void copy_audio_keys(obs_data_t *from, obs_data_t *to)
 	obs_data_set_double(to, "threshold",     obs_data_get_double(from, "threshold"));
 	obs_data_set_int(to,    "release_delay", obs_data_get_int(from, "release_delay"));
 	obs_data_set_double(to, "talking_speed", obs_data_get_double(from, "talking_speed"));
+	obs_data_set_string(to, "mouth_mode",    obs_data_get_string(from, "mouth_mode"));
+	obs_data_set_int(to,    "mouth_range",   obs_data_get_int(from, "mouth_range"));
 }
 
 // Chemin unique de changement d'avatar : bouton Charger, cycle, emplacements.

@@ -251,6 +251,10 @@ bool apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, boo
 		if (as_default) obs_data_set_default_double(settings, key, val);
 		else obs_data_set_double(settings, key, val);
 	};
+	auto set_bool = [&](const char *key, bool val) {
+		if (as_default) obs_data_set_default_bool(settings, key, val);
+		else obs_data_set_bool(settings, key, val);
+	};
 	// Each image is looked up under every supported extension; a missing image gives an empty path
 	for (size_t i = 0; i < AVATAR_IMAGE_COUNT; i++)
 		set_str(AVATAR_IMAGES[i].key, find_avatar_image(base_dir, AVATAR_IMAGES[i].stem).c_str());
@@ -278,6 +282,9 @@ bool apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, boo
 
 		load_dbl("Audio",  "threshold",    "threshold");
 		load_int("Audio",  "release_delay","release_delay");
+		load_dbl("Audio",  "talking_speed","talking_speed");
+		load_str("Audio",  "mouth_mode",   "mouth_mode");
+		load_int("Audio",  "mouth_range",  "mouth_range");
 		load_int("Blink",  "duration",     "blink_duration");
 		load_int("Blink",  "interval_min", "blink_interval_min");
 		load_int("Blink",  "interval_max", "blink_interval_max");
@@ -287,10 +294,10 @@ bool apply_avatar_to_settings(obs_data_t *settings, const char *avatar_name, boo
 		load_str("Motion", "type",         "motion_type");
 		load_int("Motion", "speed",        "motion_speed");
 		load_int("Motion", "strength",     "motion_strength");
+		load_int("Motion", "reference_height", "reference_height");
 
 		if (config_has_user_value(config, "General", "mirror"))
-			obs_data_set_bool(settings, "mirror",
-				config_get_bool(config, "General", "mirror"));
+			set_bool("mirror", config_get_bool(config, "General", "mirror"));
 
 		config_close(config);
 	}
@@ -403,6 +410,12 @@ static void write_settings_ini(const char *dir_path, obs_data_t *settings)
 			obs_data_get_double(settings, "threshold"));
 		config_set_int(config, "Audio", "release_delay",
 			(int)obs_data_get_int(settings, "release_delay"));
+		config_set_double(config, "Audio", "talking_speed",
+			obs_data_get_double(settings, "talking_speed"));
+		config_set_string(config, "Audio", "mouth_mode",
+			obs_data_get_string(settings, "mouth_mode"));
+		config_set_int(config, "Audio", "mouth_range",
+			(int)obs_data_get_int(settings, "mouth_range"));
 
 		config_set_int(config, "Blink", "duration",
 			(int)obs_data_get_int(settings, "blink_duration"));
@@ -424,6 +437,8 @@ static void write_settings_ini(const char *dir_path, obs_data_t *settings)
 			(int)obs_data_get_int(settings, "motion_speed"));
 		config_set_int(config, "Motion", "strength",
 			(int)obs_data_get_int(settings, "motion_strength"));
+		config_set_int(config, "Motion", "reference_height",
+			(int)obs_data_get_int(settings, "reference_height"));
 
 		config_save(config);
 		config_close(config);
