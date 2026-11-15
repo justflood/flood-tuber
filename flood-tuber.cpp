@@ -16,50 +16,60 @@
 #endif
 
 
-// Validate file headers to prevent crashes (e.g. renamed .txt files)
-static bool check_file_signature(const char *path) {
-    if (!path || !*path) return false;
+// What the first bytes of a file say it is, whatever its extension
+enum class FileFormat {
+    INVALID, // Unreadable, too small, or a ".gif" that is not a GIF
+    GIF,
+    PNG,     // Static or animated (APNG)
+    WEBP,
+    OTHER    // JPEG, BMP, TGA...: left to the OBS loader
+};
+
+// Reads the file header. It validates the file (e.g. a renamed .txt would crash the GIF loader)
+// and tells which decoder to use, so an image saved under the wrong extension still loads right.
+static FileFormat detect_file_format(const char *path) {
+    if (!path || !*path) return FileFormat::INVALID;
 
     FILE *f = fopen(path, "rb");
-    if (!f) return false;
+    if (!f) return FileFormat::INVALID;
 
     unsigned char sig[12] = {0};
     size_t len = fread(sig, 1, 12, f);
     fclose(f);
 
-    if (len < 4) return false; // Too small to be valid image
+    if (len < 4) return FileFormat::INVALID; // Too small to be valid image
 
     // Check GIF: "GIF87a" or "GIF89a"
     if (len >= 6 && sig[0] == 'G' && sig[1] == 'I' && sig[2] == 'F' &&
         sig[3] == '8' && (sig[4] == '7' || sig[4] == '9') && sig[5] == 'a') {
-        return true;
+        return FileFormat::GIF;
     }
 
     // Check PNG: 89 50 4E 47 0D 0A 1A 0A
     if (len >= 8 && sig[0] == 0x89 && sig[1] == 0x50 && sig[2] == 0x4E && sig[3] == 0x47 &&
         sig[4] == 0x0D && sig[5] == 0x0A && sig[6] == 0x1A && sig[7] == 0x0A) {
-        return true;
+        return FileFormat::PNG;
     }
 
     // Check WebP: RIFF .... WEBP
     if (len >= 12 && sig[0] == 'R' && sig[1] == 'I' && sig[2] == 'F' && sig[3] == 'F' &&
         sig[8] == 'W' && sig[9] == 'E' && sig[10] == 'B' && sig[11] == 'P') {
-        return true;
+        return FileFormat::WEBP;
     }
 
     // Check JPEG: FF D8 FF
     if (len >= 3 && sig[0] == 0xFF && sig[1] == 0xD8 && sig[2] == 0xFF) {
-        return true;
+        return FileFormat::OTHER;
     }
 
     // Allow others if we are brave, but for GIF specifically we MUST validate
     // because OBS crashes on corrupt GIFs.
     const char *ext = strrchr(path, '.');
     if (ext && STRCMPI(ext, ".gif") == 0) {
-        return false; // Extension says GIF but header doesn't match
+        return FileFormat::INVALID; // Extension says GIF but header doesn't match
     }
 
-    return true; // Let OBS try other formats (BMP, TGA etc) if not explicitly suspicious
+    return FileFormat::OTHER; // Let OBS try other formats (BMP, TGA etc) if not explicitly suspicious
 }
 
 // Loads an image file and initializes its texture
@@ -69,13 +79,14 @@ static void update_image(FloodImage *image, const char *path)
 	image->Free();
 
     if (path && *path) {
-        if (!check_file_signature(path)) {
+        // The decoder follows the file content, not its extension
+        FileFormat format = detect_file_format(path);
+        if (format == FileFormat::INVALID) {
             blog(LOG_WARNING, "Invalid file signature (corrupt or fake file?): %s", path);
         } else {
             const char *ext = strrchr(path, '.');
-            bool is_webp = (ext && (STRCMPI(ext, ".webp") == 0));
 
-            if (is_webp) {
+            if (format == FileFormat::WEBP) {
                 image->type = FloodImage::CUSTOM_WEBP;
                 image->webp_decoder = new WebPDecoder();
                 if (!image->webp_decoder->Load(path)) {
@@ -84,7 +95,7 @@ static void update_image(FloodImage *image, const char *path)
                 } else {
                      blog(LOG_INFO, "Loaded WebP: %s", path);
                 }
-            } else if (ext && (STRCMPI(ext, ".apng") == 0 || STRCMPI(ext, ".png") == 0)) {
+            } else if (format == FileFormat::PNG) {
                 // Check if it's an animated PNG
                 APNGDecoder *temp_decoder = new APNGDecoder();
                 if (temp_decoder->Load(path) && temp_decoder->IsAnimated()) {
@@ -104,6 +115,10 @@ static void update_image(FloodImage *image, const char *path)
                      flood_image_file_init_texture(&image->obs_image);
                 }
             } else {
+                // The OBS loader only animates a GIF when the file name ends with ".gif"
+                if (format == FileFormat::GIF && !(ext && STRCMPI(ext, ".gif") == 0))
+                    BLOG(LOG_WARNING, "GIF saved under another extension, it will not animate (rename it to .gif): %s", path);
+
                 image->type = FloodImage::OBS_STANDARD;
                 flood_image_file_init(&image->obs_image, path);
                 flood_image_file_init_texture(&image->obs_image);
