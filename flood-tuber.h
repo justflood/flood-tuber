@@ -95,10 +95,18 @@ struct AvatarImages {
 	FloodImage image_talking_2;
 	FloodImage image_talking_3;
 
+	// Optional extra talking frames (D, E, F)
+	FloodImage image_talking_4;
+	FloodImage image_talking_5;
+	FloodImage image_talking_6;
+
 	// Variants for blinking while talking
 	FloodImage image_talking_1_blink;
 	FloodImage image_talking_2_blink;
 	FloodImage image_talking_3_blink;
+	FloodImage image_talking_4_blink;
+	FloodImage image_talking_5_blink;
+	FloodImage image_talking_6_blink;
 
 	void Free() {
 		image_idle.Free();
@@ -107,9 +115,15 @@ struct AvatarImages {
 		image_talking_1.Free();
 		image_talking_2.Free();
 		image_talking_3.Free();
+		image_talking_4.Free();
+		image_talking_5.Free();
+		image_talking_6.Free();
 		image_talking_1_blink.Free();
 		image_talking_2_blink.Free();
 		image_talking_3_blink.Free();
+		image_talking_4_blink.Free();
+		image_talking_5_blink.Free();
+		image_talking_6_blink.Free();
 	}
 };
 
@@ -121,6 +135,9 @@ struct AvatarTransition {
 };
 
 #define FLOOD_SLOT_COUNT 10
+
+// Talking frames an avatar can have (A to F). A, B and C are the base set; D, E and F are optional extras.
+#define FLOOD_TALK_FRAME_COUNT 6
 
 struct flood_tuber_data;
 
@@ -167,7 +184,8 @@ struct flood_tuber_data {
 	float time_until_next_action; // Randomized target time for next action
 	float time_until_next_blink;  // Randomized target time for next blink
 
-	int talking_frame_index;   // Current talking frame index (0, 1, or 2)
+	int talking_frame_index;   // Current talking frame index (0 = A ... 5 = F)
+	int talk_frame_count;      // Frames in the talking cycle: 3, or up to 6 when extra frames are set
 	bool is_blinking_now;      // True if currently in a blink phase
 
 	volatile float current_db; // Current audio level in decibels

@@ -60,6 +60,12 @@ static const struct {
 	{"path_talk_1_blink", "talk_a_blink"},
 	{"path_talk_2_blink", "talk_b_blink"},
 	{"path_talk_3_blink", "talk_c_blink"},
+	{"path_talk_4",       "talk_d"},
+	{"path_talk_5",       "talk_e"},
+	{"path_talk_6",       "talk_f"},
+	{"path_talk_4_blink", "talk_d_blink"},
+	{"path_talk_5_blink", "talk_e_blink"},
+	{"path_talk_6_blink", "talk_f_blink"},
 };
 static const size_t AVATAR_IMAGE_COUNT = sizeof(AVATAR_IMAGES) / sizeof(AVATAR_IMAGES[0]);
 
@@ -314,6 +320,7 @@ void flood_tuber_defaults(obs_data_t *settings)
 	obs_data_set_default_int(settings,    "motion_strength",    1);
 	obs_data_set_default_int(settings, "reference_height", 512);
 	obs_data_set_default_bool(settings, "keep_audio_on_switch", false);
+	obs_data_set_default_bool(settings, "show_extra_frames", false);
 	// Avatar transition (crossfade between avatars)
 	obs_data_set_default_bool(settings, "avatar_fade_enabled", true);
 	obs_data_set_default_int(settings, "avatar_fade_duration", 300);
@@ -367,6 +374,12 @@ IMPLEMENT_CLEAR_CALLBACK(clear_talk_1_blink,  "path_talk_1_blink")
 IMPLEMENT_CLEAR_CALLBACK(clear_talk_2_blink,  "path_talk_2_blink")
 IMPLEMENT_CLEAR_CALLBACK(clear_talk_3,        "path_talk_3")
 IMPLEMENT_CLEAR_CALLBACK(clear_talk_3_blink,  "path_talk_3_blink")
+IMPLEMENT_CLEAR_CALLBACK(clear_talk_4,        "path_talk_4")
+IMPLEMENT_CLEAR_CALLBACK(clear_talk_4_blink,  "path_talk_4_blink")
+IMPLEMENT_CLEAR_CALLBACK(clear_talk_5,        "path_talk_5")
+IMPLEMENT_CLEAR_CALLBACK(clear_talk_5_blink,  "path_talk_5_blink")
+IMPLEMENT_CLEAR_CALLBACK(clear_talk_6,        "path_talk_6")
+IMPLEMENT_CLEAR_CALLBACK(clear_talk_6_blink,  "path_talk_6_blink")
 
 // Writes current settings to a settings.ini file at the given directory path
 static void write_settings_ini(const char *dir_path, obs_data_t *settings)
@@ -668,6 +681,35 @@ static bool on_motion_type_changed(obs_properties_t *props, obs_property_t *p,
 	return true;
 }
 
+// Shows or hides the extra talking frames (D, E, F), following the "show_extra_frames" box.
+// Most avatars only have A, B, C and the image list is long enough without them.
+static bool on_show_extra_frames_changed(obs_properties_t *props, obs_property_t *p,
+                                         obs_data_t *settings)
+{
+	(void)p;
+	static const char *const paths[] = {
+		"path_talk_4", "path_talk_4_blink", "path_talk_5",
+		"path_talk_5_blink", "path_talk_6", "path_talk_6_blink",
+	};
+	static const char *const buttons[] = {
+		"clear_talk_4", "clear_talk_4_blink", "clear_talk_5",
+		"clear_talk_5_blink", "clear_talk_6", "clear_talk_6_blink",
+	};
+
+	bool show = obs_data_get_bool(settings, "show_extra_frames");
+	if (!obs_data_has_user_value(settings, "show_extra_frames")) {
+		// Box never touched: show the frames if the avatar already uses one
+		for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
+			const char *path = obs_data_get_string(settings, paths[i]);
+			if (path && *path) show = true;
+		}
+	}
+	for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
+		obs_property_set_visible(obs_properties_get(props, paths[i]), show);
+		obs_property_set_visible(obs_properties_get(props, buttons[i]), show);
+	}
+	return true;
+}
 
 // Called when the custom avatars folder path changes — rebuilds the dropdown
 static bool on_custom_path_changed(obs_properties_t *props, obs_property_t *p, obs_data_t *settings)
@@ -803,6 +845,26 @@ obs_properties_t *flood_tuber_properties(void *data)
 	add_file_prop(img, "path_talk_3_blink", obs_module_text("path_talk_3_blink"), obs_module_text("path_talk_3_blink_tooltip"));
 	obs_properties_add_button2(img, "clear_talk_3_blink", clear_txt, clear_talk_3_blink, data);
 
+	// Extra talking frames D, E, F (hidden until asked for, see on_show_extra_frames_changed)
+	obs_property_t *p_extra = obs_properties_add_bool(img, "show_extra_frames",
+		obs_module_text("show_extra_frames"));
+	obs_property_set_modified_callback(p_extra, on_show_extra_frames_changed);
+
+	add_file_prop(img, "path_talk_4",       obs_module_text("path_talk_4"),       obs_module_text("path_talk_4_tooltip"));
+	obs_properties_add_button2(img, "clear_talk_4",       clear_txt, clear_talk_4, data);
+	add_file_prop(img, "path_talk_4_blink", obs_module_text("path_talk_4_blink"), obs_module_text("path_talk_4_blink_tooltip"));
+	obs_properties_add_button2(img, "clear_talk_4_blink", clear_txt, clear_talk_4_blink, data);
+
+	add_file_prop(img, "path_talk_5",       obs_module_text("path_talk_5"),       obs_module_text("path_talk_5_tooltip"));
+	obs_properties_add_button2(img, "clear_talk_5",       clear_txt, clear_talk_5, data);
+	add_file_prop(img, "path_talk_5_blink", obs_module_text("path_talk_5_blink"), obs_module_text("path_talk_5_blink_tooltip"));
+	obs_properties_add_button2(img, "clear_talk_5_blink", clear_txt, clear_talk_5_blink, data);
+
+	add_file_prop(img, "path_talk_6",       obs_module_text("path_talk_6"),       obs_module_text("path_talk_6_tooltip"));
+	obs_properties_add_button2(img, "clear_talk_6",       clear_txt, clear_talk_6, data);
+	add_file_prop(img, "path_talk_6_blink", obs_module_text("path_talk_6_blink"), obs_module_text("path_talk_6_blink_tooltip"));
+	obs_properties_add_button2(img, "clear_talk_6_blink", clear_txt, clear_talk_6_blink, data);
+
 	// ── 3. Audio & Trigger ─────────────────────────────────────────────────
 	obs_properties_t *audio = obs_properties_create();
 	obs_properties_add_group(props, "audio_settings",
@@ -913,6 +975,7 @@ obs_properties_t *flood_tuber_properties(void *data)
 		obs_data_t *settings = obs_source_get_settings(tuber->source);
 		if (settings) {
 			on_motion_type_changed(motion, p_mtype, settings);
+			on_show_extra_frames_changed(props, p_extra, settings);
 			obs_data_release(settings);
 		}
 	}

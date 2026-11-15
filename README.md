@@ -102,6 +102,7 @@ I offer two installation methods:
 3.  Place your images inside and rename them exactly like this:
     *   `idle.png`
     *   `talk_a.png`, `talk_b.png`, `talk_c.png`
+    *   *(Optional)* `talk_d.png`, `talk_e.png`, `talk_f.png` for extra talking frames.
     *   `blink.png`
     *   `action.png`
     *   *(Optional)* `talk_a_blink.png` etc. for blinking while talking.

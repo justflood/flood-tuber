@@ -221,13 +221,15 @@ static uint32_t flood_image_get_height(FloodImage *img) {
 
 // ── Crossfade between avatars ─────────────────────────────────────────────
 
-// Hash of the 9 image paths. It changes only when the avatar itself changes.
+// Hash of the image paths. It changes only when the avatar itself changes.
 static uint64_t avatar_paths_hash(obs_data_t *settings)
 {
 	static const char *const keys[] = {
 		"path_idle",         "path_blink",        "path_action",
 		"path_talk_1",       "path_talk_2",       "path_talk_3",
 		"path_talk_1_blink", "path_talk_2_blink", "path_talk_3_blink",
+		"path_talk_4",       "path_talk_5",       "path_talk_6",
+		"path_talk_4_blink", "path_talk_5_blink", "path_talk_6_blink",
 	};
 
 	uint64_t hash = 1469598103934665603ULL; // FNV-1a, 64 bits
@@ -369,9 +371,15 @@ static void flood_avatar_tick(AvatarImages *set, uint64_t elapsed_ns)
 	flood_image_tick(&set->image_talking_1, elapsed_ns);
 	flood_image_tick(&set->image_talking_2, elapsed_ns);
 	flood_image_tick(&set->image_talking_3, elapsed_ns);
+	flood_image_tick(&set->image_talking_4, elapsed_ns);
+	flood_image_tick(&set->image_talking_5, elapsed_ns);
+	flood_image_tick(&set->image_talking_6, elapsed_ns);
 	flood_image_tick(&set->image_talking_1_blink, elapsed_ns);
 	flood_image_tick(&set->image_talking_2_blink, elapsed_ns);
 	flood_image_tick(&set->image_talking_3_blink, elapsed_ns);
+	flood_image_tick(&set->image_talking_4_blink, elapsed_ns);
+	flood_image_tick(&set->image_talking_5_blink, elapsed_ns);
+	flood_image_tick(&set->image_talking_6_blink, elapsed_ns);
 }
 
 // Advances the fade by 'seconds'. Runs in the graphics context: the outgoing avatar is released at the end.
@@ -421,32 +429,26 @@ static gs_texture_t *select_avatar_texture(struct flood_tuber_data *data, Avatar
 	else if (data->current_state == AvatarState::TALKING) {
 		bool blink = data->is_blinking_now;
 
-		int idx = data->talking_frame_index;
-		FloodImage *talk_img = nullptr;
-		FloodImage *talk_blink_img = nullptr;
+		FloodImage *const talk_frames[FLOOD_TALK_FRAME_COUNT] = {
+			&s->image_talking_1, &s->image_talking_2, &s->image_talking_3,
+			&s->image_talking_4, &s->image_talking_5, &s->image_talking_6,
+		};
+		FloodImage *const talk_blink_frames[FLOOD_TALK_FRAME_COUNT] = {
+			&s->image_talking_1_blink, &s->image_talking_2_blink, &s->image_talking_3_blink,
+			&s->image_talking_4_blink, &s->image_talking_5_blink, &s->image_talking_6_blink,
+		};
 
 		// Select based on index
-		if (idx == 0) {
-			talk_img = &s->image_talking_1;
-			talk_blink_img = &s->image_talking_1_blink;
-		} else if (idx == 1) {
-			talk_img = &s->image_talking_2;
-			talk_blink_img = &s->image_talking_2_blink;
-		} else {
-			talk_img = &s->image_talking_3;
-			talk_blink_img = &s->image_talking_3_blink;
-		}
+		int idx = data->talking_frame_index;
+		if (idx < 0) idx = 0;
+		if (idx >= FLOOD_TALK_FRAME_COUNT) idx = FLOOD_TALK_FRAME_COUNT - 1;
 
-		// Fallbacks
-		if (!flood_image_get_texture(talk_img) && idx == 2) {
-			talk_img = &s->image_talking_2;
-			talk_blink_img = &s->image_talking_2_blink;
-			idx = 1;
-		}
-		if (!flood_image_get_texture(talk_img) && idx == 1) {
-			talk_img = &s->image_talking_1;
-			talk_blink_img = &s->image_talking_1_blink;
-		}
+		// Fallbacks: a missing frame shows the one before it (F -> E -> ... -> A)
+		while (idx > 0 && !flood_image_get_texture(talk_frames[idx]))
+			idx--;
+
+		FloodImage *talk_img = talk_frames[idx];
+		FloodImage *talk_blink_img = talk_blink_frames[idx];
 
 		// Determine final texture
 		if (blink && talk_blink_img && flood_image_get_texture(talk_blink_img)) {
@@ -786,6 +788,23 @@ static void flood_tuber_update(void *data_ptr, obs_data_t *settings)
 	update_image_setting(&data->cur.image_talking_1_blink, settings, "path_talk_1_blink");
 	update_image_setting(&data->cur.image_talking_2_blink, settings, "path_talk_2_blink");
 	update_image_setting(&data->cur.image_talking_3_blink, settings, "path_talk_3_blink");
+	update_image_setting(&data->cur.image_talking_4, settings, "path_talk_4");
+	update_image_setting(&data->cur.image_talking_5, settings, "path_talk_5");
+	update_image_setting(&data->cur.image_talking_6, settings, "path_talk_6");
+	update_image_setting(&data->cur.image_talking_4_blink, settings, "path_talk_4_blink");
+	update_image_setting(&data->cur.image_talking_5_blink, settings, "path_talk_5_blink");
+	update_image_setting(&data->cur.image_talking_6_blink, settings, "path_talk_6_blink");
+
+	// The talking cycle runs from frame A to the last extra frame that is set, and never over
+	// fewer than A, B, C: avatars without extra frames keep the rhythm they always had.
+	FloodImage *const extra_frames[] = {
+		&data->cur.image_talking_4, &data->cur.image_talking_5, &data->cur.image_talking_6,
+	};
+	data->talk_frame_count = 3;
+	for (int i = 0; i < 3; i++) {
+		if (flood_image_get_texture(extra_frames[i]))
+			data->talk_frame_count = 4 + i;
+	}
 
 	data->threshold = (float)obs_data_get_double(settings, "threshold");
 	data->release_delay = (float)obs_data_get_int(settings, "release_delay") / 1000.0f; // ms to seconds
@@ -876,17 +895,28 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 	}
 
 	if (data->current_state == AvatarState::TALKING) {
+		int frame_count = data->talk_frame_count;
+		if (frame_count < 3) frame_count = 3;
+		if (frame_count > FLOOD_TALK_FRAME_COUNT) frame_count = FLOOD_TALK_FRAME_COUNT;
+
 		if (data->mouth_by_volume) {
 			// Envelope follower: the level rises fast and falls slowly, so the mouth does not flicker
 			float rate = data->current_db > data->level_db ? 30.0f : 6.0f;
 			data->level_db += (data->current_db - data->level_db) * (1.0f - expf(-seconds * rate));
-			// 0 at the threshold, 1 at threshold + mouth_range: three equal bands for frames A, B and C
+			// 0 at the threshold, 1 at threshold + mouth_range: equal bands, one per talking frame
 			float openness = (data->level_db - data->threshold) / data->mouth_range;
-			data->talking_frame_index = openness < 0.33f ? 0 : (openness < 0.66f ? 1 : 2);
+			if (frame_count == 3)
+				data->talking_frame_index = openness < 0.33f ? 0 : (openness < 0.66f ? 1 : 2);
+			else if (openness <= 0.0f)
+				data->talking_frame_index = 0;
+			else if (openness >= 1.0f)
+				data->talking_frame_index = frame_count - 1;
+			else
+				data->talking_frame_index = (int)(openness * (float)frame_count);
 		} else {
 			data->timer_talk_anim += seconds;
 			if (data->timer_talk_anim > data->talk_interval) {
-				data->talking_frame_index = (data->talking_frame_index + 1) % 3;
+				data->talking_frame_index = (data->talking_frame_index + 1) % frame_count;
 				data->timer_talk_anim = 0.0f;
 			}
 		}
