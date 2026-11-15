@@ -187,6 +187,7 @@ struct flood_tuber_data {
 	int talking_frame_index;   // Current talking frame index (0 = A ... 5 = F)
 	int talk_frame_count;      // Frames in the talking cycle: 3, or up to 6 when extra frames are set
 	bool is_blinking_now;      // True if currently in a blink phase
+	uint32_t rng_state;        // Private random generator (blink and action intervals)
 
 	volatile float current_db; // Current audio level in decibels
 

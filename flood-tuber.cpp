@@ -663,6 +663,7 @@ static void *flood_tuber_create(obs_data_t *settings, obs_source_t *source)
 	data->current_state = AvatarState::IDLE;
 	data->talking_frame_index = 0;
 	data->timer_release_hold = 0.0f;
+	data->rng_state = (uint32_t)(os_gettime_ns() ^ (uint64_t)(uintptr_t)data);
 
 	// Raccourcis : suivant, précédent, puis emplacements 1..20
 	data->hotkey_next = obs_hotkey_register_source(source, "flood_tuber.avatar_next",
@@ -861,6 +862,23 @@ static void flood_tuber_update(void *data_ptr, obs_data_t *settings)
 	data->time_until_next_blink = data->blink_interval_min;
 }
 
+// Uniform random number between lo and hi. rand() was used here before, but through an integer
+// modulo: intervals only fell on whole seconds and never reached the maximum. This small private
+// generator (xorshift32) also leaves the rand() sequence of the OBS process alone.
+static float random_between(struct flood_tuber_data *data, float lo, float hi)
+{
+	if (hi <= lo)
+		return lo;
+
+	uint32_t x = data->rng_state ? data->rng_state : 0x9E3779B9u;
+	x ^= x << 13;
+	x ^= x >> 17;
+	x ^= x << 5;
+	data->rng_state = x;
+
+	return lo + (hi - lo) * ((float)(x >> 8) / 16777216.0f); // 24 random bits -> [0, 1)
+}
+
 // Main Tick: Handles state logic (Idle/Talking switching, timers for blinking and actions)
 static void flood_tuber_tick(void *data_ptr, float seconds)
 {
@@ -931,10 +949,8 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 			if (data->timer_action >= data->action_duration) {
 				data->current_state = AvatarState::IDLE;
 				data->timer_action = 0.0f;
-				int range = (int)(data->action_interval_max - data->action_interval_min);
-				if (range <= 0)
-					range = 1;
-				data->time_until_next_action = data->action_interval_min + (rand() % range);
+				data->time_until_next_action =
+					random_between(data, data->action_interval_min, data->action_interval_max);
 			}
 		} else {
 			data->timer_action += seconds;
@@ -956,10 +972,8 @@ static void flood_tuber_tick(void *data_ptr, float seconds)
 		if (data->is_blinking_now && data->timer_blink >= data->blink_duration) {
 			data->is_blinking_now = false;
 			data->timer_blink = 0.0f;
-			int range = (int)(data->blink_interval_max - data->blink_interval_min);
-			if (range <= 0)
-				range = 1;
-			data->time_until_next_blink = data->blink_interval_min + (rand() % range);
+			data->time_until_next_blink =
+				random_between(data, data->blink_interval_min, data->blink_interval_max);
 		}
 	} else {
 		data->is_blinking_now = false;
